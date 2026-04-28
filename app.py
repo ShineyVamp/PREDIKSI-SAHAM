@@ -462,121 +462,121 @@ if run_button:
         else:
             st.markdown('<div class="warn-box">⚠️ Temporal attention tidak tersedia — model menggunakan mode simulasi.</div>', unsafe_allow_html=True)
 
-        # ── 8. ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN ───────────────────
-            st.markdown('<div class="section-title">07 · Analisis Teknikal</div>', unsafe_allow_html=True)
-            
-            # Hitung Proyeksi RSI dan Volatilitas Masa Depan
-            # 1. Gabungkan data close historis dan prediksi masa depan
-            all_close = pd.concat([featured_df['close'], pd.Series(future_pred['close'], index=future_dates)]) # <--- Tambahkan ['close']
-            
-            # 2. Kalkulasi RSI Masa Depan
-            delta = all_close.diff()
-            gain = delta.where(delta > 0, 0.0)
-            loss = -delta.where(delta < 0, 0.0)
-            avg_gain = gain.ewm(com=13, min_periods=14).mean()
-            avg_loss = loss.ewm(com=13, min_periods=14).mean()
-            rs = avg_gain / (avg_loss + 1e-8)
-            all_rsi = 100 - (100 / (1 + rs))
-            future_rsi = all_rsi[future_dates]
-            
-            # 3. Kalkulasi Volatilitas Masa Depan
-            all_return = all_close.pct_change()
-            all_vol = all_return.rolling(20).std()
-            future_vol = all_vol[future_dates]
-        
-            # Menyiapkan Canvas Grafik
-            fig_tech = make_subplots(
-                rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.25, 0.25],
-                vertical_spacing=0.05,
-                subplot_titles=("Harga + Moving Averages", "RSI (14)", "Volatilitas Harian (%)")
-            )
-            plot_df = featured_df.tail(252)
-        
-            # --- ROW 1: HARGA HISTORIS (OHLC) ---
-            fig_tech.add_trace(go.Candlestick(
-                x=plot_df.index,
-                open=plot_df['open'],  high=plot_df['high'],
-                low=plot_df['low'],    close=plot_df['close'],
-                name='OHLC Aktual', increasing_line_color='#00ff88', decreasing_line_color='#ef4444'
-            ), row=1, col=1)
-        
-            for col_name, color, label in [('ma_20','#f59e0b','MA20'), ('ma_50','#3b82f6','MA50')]:
-                if col_name in plot_df.columns:
-                    fig_tech.add_trace(go.Scatter(
-                        x=plot_df.index, y=plot_df[col_name],
-                        mode='lines', name=label,
-                        line=dict(color=color, width=1.5)
-                    ), row=1, col=1)
-        
-            # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
-            fig_tech.add_trace(go.Candlestick(
-                x=future_dates,
-                open=future_pred['open'],
-                high=future_pred['high'],
-                low=future_pred['low'],
-                close=future_pred['close'],
-                name='Forecast OHLC', 
-                increasing_line_color='rgba(0, 255, 136, 0.5)', # Warna hijau transparan
-                decreasing_line_color='rgba(239, 68, 68, 0.5)'  # Warna merah transparan
-            ), row=1, col=1)
-                
-            # --- ROW 2: RSI HISTORIS ---
-            if 'rsi' in plot_df.columns:
-                fig_tech.add_trace(go.Scatter(
-                    x=plot_df.index, y=plot_df['rsi'],
-                    mode='lines', name='RSI Aktual',
-                    line=dict(color='#a78bfa', width=1.5)
-                ), row=2, col=1)
-                fig_tech.add_hline(y=70, line_dash='dash', line_color='#ef4444', row=2, col=1)
-                fig_tech.add_hline(y=30, line_dash='dash', line_color='#00ff88', row=2, col=1)
-        
-            # PROYEKSI ROW 2: GARIS RSI MASA DEPAN
-            last_rsi = featured_df['rsi'].iloc[-1]
+    # ── 8. ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN ───────────────────
+    st.markdown('<div class="section-title">07 · Analisis Teknikal</div>', unsafe_allow_html=True)
+    
+    # Hitung Proyeksi RSI dan Volatilitas Masa Depan
+    # 1. Gabungkan data close historis dan prediksi masa depan
+    all_close = pd.concat([featured_df['close'], pd.Series(future_pred['close'], index=future_dates)]) # <--- Tambahkan ['close']
+    
+    # 2. Kalkulasi RSI Masa Depan
+    delta = all_close.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rs = avg_gain / (avg_loss + 1e-8)
+    all_rsi = 100 - (100 / (1 + rs))
+    future_rsi = all_rsi[future_dates]
+    
+    # 3. Kalkulasi Volatilitas Masa Depan
+    all_return = all_close.pct_change()
+    all_vol = all_return.rolling(20).std()
+    future_vol = all_vol[future_dates]
+
+    # Menyiapkan Canvas Grafik
+    fig_tech = make_subplots(
+        rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.25, 0.25],
+        vertical_spacing=0.05,
+        subplot_titles=("Harga + Moving Averages", "RSI (14)", "Volatilitas Harian (%)")
+    )
+    plot_df = featured_df.tail(252)
+
+    # --- ROW 1: HARGA HISTORIS (OHLC) ---
+    fig_tech.add_trace(go.Candlestick(
+        x=plot_df.index,
+        open=plot_df['open'],  high=plot_df['high'],
+        low=plot_df['low'],    close=plot_df['close'],
+        name='OHLC Aktual', increasing_line_color='#00ff88', decreasing_line_color='#ef4444'
+    ), row=1, col=1)
+
+    for col_name, color, label in [('ma_20','#f59e0b','MA20'), ('ma_50','#3b82f6','MA50')]:
+        if col_name in plot_df.columns:
             fig_tech.add_trace(go.Scatter(
-                x=[last_date] + list(future_dates),
-                y=[last_rsi] + list(future_rsi),
-                mode='lines', name='Forecast RSI',
-                line=dict(color='#00ff88', width=2, dash='dot')
-            ), row=2, col=1)
+                x=plot_df.index, y=plot_df[col_name],
+                mode='lines', name=label,
+                line=dict(color=color, width=1.5)
+            ), row=1, col=1)
+
+    # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
+    fig_tech.add_trace(go.Candlestick(
+        x=future_dates,
+        open=future_pred['open'],
+        high=future_pred['high'],
+        low=future_pred['low'],
+        close=future_pred['close'],
+        name='Forecast OHLC', 
+        increasing_line_color='rgba(0, 255, 136, 0.5)', # Warna hijau transparan
+        decreasing_line_color='rgba(239, 68, 68, 0.5)'  # Warna merah transparan
+    ), row=1, col=1)
         
-            # --- ROW 3: VOLATILITAS HISTORIS ---
-            if 'volatility' in plot_df.columns:
-                fig_tech.add_trace(go.Bar(
-                    x=plot_df.index, y=plot_df['volatility'] * 100,
-                    name='Volatilitas Aktual', marker_color='#f59e0b', opacity=0.7
-                ), row=3, col=1)
-        
-            # PROYEKSI ROW 3: BAR VOLATILITAS MASA DEPAN
-            fig_tech.add_trace(go.Bar(
-                x=future_dates, y=future_vol * 100,
-                name='Forecast Volatilitas', marker_color='#00ff88', opacity=0.4
-            ), row=3, col=1)
-        
-            # Penanda "Today" (Garis Vertikal)
-            fig_tech.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="#f59e0b", line_width=1.5, row='all', col=1)
-        
-            fig_tech.update_layout(
-                template='plotly_dark',
-                paper_bgcolor='#0a0e1a', plot_bgcolor='#0a0e1a',
-                height=640, showlegend=True,
-                legend=dict(bgcolor='#111827', bordercolor='#1e293b', orientation='h', y=-0.08),
-                font=dict(family='DM Sans', color='#94a3b8', size=11),
-                xaxis_rangeslider_visible=False,
-                margin=dict(l=10, r=10, t=40, b=10)
-            )
-            for ax in ['xaxis', 'xaxis2', 'xaxis3', 'yaxis', 'yaxis2', 'yaxis3']:
-                fig_tech.update_layout(**{ax: dict(gridcolor='#1e293b')})
-        
-            st.plotly_chart(fig_tech, use_container_width=True)
-        
-            st.markdown(f"""
-            <div style="margin-top:2rem; padding:1rem 1.5rem; background:#111827; border:1px solid #1e293b;
-                        border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.8rem; color:#475569;">
-            ⚠️ <b style="color:#64748b">Disclaimer:</b> Prediksi ini dibuat untuk tujuan edukasi dan riset.
-            Bukan merupakan saran investasi. Selalu lakukan riset mandiri sebelum berinvestasi.
-            Model TFT dilatih pada data historis dan tidak menjamin hasil di masa depan.
-            </div>
-            """, unsafe_allow_html=True)
+    # --- ROW 2: RSI HISTORIS ---
+    if 'rsi' in plot_df.columns:
+        fig_tech.add_trace(go.Scatter(
+            x=plot_df.index, y=plot_df['rsi'],
+            mode='lines', name='RSI Aktual',
+            line=dict(color='#a78bfa', width=1.5)
+        ), row=2, col=1)
+        fig_tech.add_hline(y=70, line_dash='dash', line_color='#ef4444', row=2, col=1)
+        fig_tech.add_hline(y=30, line_dash='dash', line_color='#00ff88', row=2, col=1)
+
+    # PROYEKSI ROW 2: GARIS RSI MASA DEPAN
+    last_rsi = featured_df['rsi'].iloc[-1]
+    fig_tech.add_trace(go.Scatter(
+        x=[last_date] + list(future_dates),
+        y=[last_rsi] + list(future_rsi),
+        mode='lines', name='Forecast RSI',
+        line=dict(color='#00ff88', width=2, dash='dot')
+    ), row=2, col=1)
+
+    # --- ROW 3: VOLATILITAS HISTORIS ---
+    if 'volatility' in plot_df.columns:
+        fig_tech.add_trace(go.Bar(
+            x=plot_df.index, y=plot_df['volatility'] * 100,
+            name='Volatilitas Aktual', marker_color='#f59e0b', opacity=0.7
+        ), row=3, col=1)
+
+    # PROYEKSI ROW 3: BAR VOLATILITAS MASA DEPAN
+    fig_tech.add_trace(go.Bar(
+        x=future_dates, y=future_vol * 100,
+        name='Forecast Volatilitas', marker_color='#00ff88', opacity=0.4
+    ), row=3, col=1)
+
+    # Penanda "Today" (Garis Vertikal)
+    fig_tech.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="#f59e0b", line_width=1.5, row='all', col=1)
+
+    fig_tech.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='#0a0e1a', plot_bgcolor='#0a0e1a',
+        height=640, showlegend=True,
+        legend=dict(bgcolor='#111827', bordercolor='#1e293b', orientation='h', y=-0.08),
+        font=dict(family='DM Sans', color='#94a3b8', size=11),
+        xaxis_rangeslider_visible=False,
+        margin=dict(l=10, r=10, t=40, b=10)
+    )
+    for ax in ['xaxis', 'xaxis2', 'xaxis3', 'yaxis', 'yaxis2', 'yaxis3']:
+        fig_tech.update_layout(**{ax: dict(gridcolor='#1e293b')})
+
+    st.plotly_chart(fig_tech, use_container_width=True)
+
+    st.markdown(f"""
+    <div style="margin-top:2rem; padding:1rem 1.5rem; background:#111827; border:1px solid #1e293b;
+                border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.8rem; color:#475569;">
+    ⚠️ <b style="color:#64748b">Disclaimer:</b> Prediksi ini dibuat untuk tujuan edukasi dan riset.
+    Bukan merupakan saran investasi. Selalu lakukan riset mandiri sebelum berinvestasi.
+    Model TFT dilatih pada data historis dan tidak menjamin hasil di masa depan.
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Tampilan awal sebelum klik ─────────────────────────────────────────────
 else:
