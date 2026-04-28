@@ -286,7 +286,7 @@ class RealTFTModel:
         combined = pd.concat([last_seq, future_df], ignore_index=True).ffill().fillna(0)
         combined['ticker_id'] = str(TICKER_ID_MAP_STR.get(self.ticker, '0'))
 
-      try:
+        try:
             future_ds = TimeSeriesDataSet.from_dataset(self._train_dataset, combined, predict=False, stop_randomization=True)
             future_loader = future_ds.to_dataloader(train=False, batch_size=1, num_workers=0)
             future_preds  = self.model.predict(future_loader, mode="prediction", trainer_kwargs={"logger": False})
