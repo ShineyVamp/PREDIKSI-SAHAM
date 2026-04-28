@@ -21,7 +21,7 @@ plotly>=5.18.0
 # CPU-only install (lebih kecil). Untuk GPU: hapus --index-url dan
 # install versi CUDA dari https://pytorch.org
 torch>=2.1.0
-# --index-url https://download.pytorch.org/whl/cpu
+--index-url https://download.pytorch.org/whl/cpu
 
 # ── TFT Model ───────────────────────────────────────────────────
 pytorch-forecasting>=1.0.0
