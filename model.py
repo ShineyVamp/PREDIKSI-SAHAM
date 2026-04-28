@@ -120,10 +120,8 @@ class RealTFTModel:
         train_ds, val_ds = self._create_datasets(prepared_df)
         self._train_dataset = train_ds
 
-        train_loader = DataLoader(train_ds, batch_size=self.config["batch_size"],
-                                  shuffle=True,  num_workers=0, persistent_workers=False)
-        val_loader   = DataLoader(val_ds,   batch_size=self.config["batch_size"] * 2,
-                                  shuffle=False, num_workers=0, persistent_workers=False)
+        train_loader = train_ds.to_dataloader(train=True, batch_size=self.config["batch_size"], num_workers=0)
+        val_loader   = val_ds.to_dataloader(train=False, batch_size=self.config["batch_size"] * 2, num_workers=0)
 
         # 3. Bangun model
         self.model = TemporalFusionTransformer.from_dataset(
@@ -295,7 +293,7 @@ class RealTFTModel:
                 self._train_dataset, combined,
                 predict=True, stop_randomization=True
             )
-            future_loader = DataLoader(future_ds, batch_size=1, shuffle=False, num_workers=0)
+            future_loader = future_ds.to_dataloader(train=False, batch_size=1, num_workers=0)
             future_preds  = self.model.predict(future_loader, mode="prediction",
                                                trainer_kwargs={"logger": False})
             if isinstance(future_preds, tuple):
