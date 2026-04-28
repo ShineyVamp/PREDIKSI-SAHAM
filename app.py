@@ -308,8 +308,8 @@ if run_button:
     metrics = evaluate_predictions(actuals, predictions)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("MAE",  f"{metrics['MAE']:.2f}",  delta=f"Rp {metrics['MAE']:.0f}")
-    c2.metric("RMSE", f"{metrics['RMSE']:.2f}", delta=f"Rp {metrics['RMSE']:.0f}")
+    c1.metric("MAE",  f"{metrics['MAE']:.2f}",  delta=f"{metrics['MAE']:.0f}")
+    c2.metric("RMSE", f"{metrics['RMSE']:.2f}", delta=f"{metrics['RMSE']:.0f}")
     c3.metric("MAPE", f"{metrics['MAPE']:.2f}%")
     c4.metric("R²",   f"{metrics['R2']:.4f}")
 
