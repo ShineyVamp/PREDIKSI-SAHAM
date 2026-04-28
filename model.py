@@ -225,6 +225,13 @@ class RealTFTModel:
         numeric_cols = result.select_dtypes(include=[np.number]).columns
         result[numeric_cols] = result[numeric_cols].ffill().fillna(0)
 
+        # ── BUGFIX: Konversi OHLCV ke float untuk PyTorch Softplus ──
+        targets = ["open", "high", "low", "close", "volume"]
+        for t in targets:
+            if t in result.columns:
+                result[t] = result[t].astype(float)
+        # ────────────────────────────────────────────────────────────
+
         # Pastikan ticker_id adalah string untuk categorical
         result['ticker_id'] = result['ticker_id'].astype(str)
 
