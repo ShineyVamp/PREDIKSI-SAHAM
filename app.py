@@ -316,9 +316,19 @@ if run_button:
     # ── 5. CHART AKTUAL vs PREDIKSI ───────────────────────────────────────
     st.markdown('<div class="section-title">05 · Aktual vs Prediksi (Backtest)</div>', unsafe_allow_html=True)
 
-    dates_hist   = featured_df.index[-len(actuals):]
+    # Tentukan titik jangkar "Today" yang benar-benar akurat dari data asli
+    last_date = featured_df.index[-1]
+    last_close = featured_df['close'].iloc[-1]
+
+    # Sinkronisasi tanggal backtest agar posisinya pas dengan garis historis
+    shift = forecast_days - 1
+    if shift > 0:
+        dates_hist = featured_df.index[-len(actuals)-shift : -shift]
+    else:
+        dates_hist = featured_df.index[-len(actuals):]
+
     future_dates = pd.date_range(
-        start=featured_df.index[-1] + pd.Timedelta(days=1),
+        start=last_date + pd.Timedelta(days=1),
         periods=len(future_pred), freq='B'
     )
 
