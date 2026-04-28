@@ -28,26 +28,19 @@ try:
         TimeSeriesDataSet,
     )
     from pytorch_forecasting.data.encoders import MultiNormalizer, EncoderNormalizer
-    
     # ── BUGFIX PANDAS 2.0+ UNTUK MULTI-TARGET ─────────────────────────────────
     class SafeMultiNormalizer(MultiNormalizer):
         """Patch untuk memperbaiki KeyError 'tuple not found' pada pandas >= 2.0"""
         def fit(self, y, X=None):
-            for idx, normalizer in enumerate(self.normalizers):
-                # Gunakan .iloc untuk DataFrame agar kompatibel dengan Pandas 2.0+
-                if isinstance(y, pd.DataFrame):
-                    y_col = y.iloc[:, idx]
-                elif isinstance(y, (list, tuple)):
-                    y_col = y[idx]
-                else:
-                    y_col = y[:, idx]
-                    
-                if X is not None:
-                    normalizer.fit(y_col, X)
-                else:
-                    normalizer.fit(y_col)
-            self.fitted_ = True
-            return self
+            # Konversi DataFrame/Series menjadi format numpy murni sebelum diproses
+            if isinstance(y, (pd.DataFrame, pd.Series)): 
+                y = y.values
+            return super().fit(y, X)
+    
+        def transform(self, y, X=None, return_norm=False, target_scale=None):
+            if isinstance(y, (pd.DataFrame, pd.Series)): 
+                y = y.values
+            return super().transform(y, X=X, return_norm=return_norm, target_scale=target_scale)
     from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, MAE as PF_MAE
     from torch.utils.data import DataLoader
     PF_AVAILABLE = True
@@ -218,7 +211,7 @@ class RealTFTModel:
         training_ds = TimeSeriesDataSet(
             df[df['time_idx'] <= val_cutoff],
             time_idx                  = "time_idx",
-            target                    = "close",
+            target                    = ["open", "high", "low", "close", "volume"], # <--- UBAH JADI 5 TARGET
             group_ids                 = ["group_id"],
             min_encoder_length        = enc_len // 2,
             max_encoder_length        = enc_len,
