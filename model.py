@@ -445,7 +445,17 @@ class FallbackTFTModel:
 
         self._fitted = True
         attn_weights = _mock_attention_weights(self.ticker)
-        return predictions, actuals, attn_weights, future_pred
+        
+        # --- UBAH ARRAY JADI DICTIONARY AGAR APP.PY TIDAK ERROR ---
+        future_dict = {
+            "open": future_pred,
+            "high": future_pred * 1.01,
+            "low": future_pred * 0.99,
+            "close": future_pred,
+            "volume": np.array([1000000] * len(future_pred))
+        }
+        
+        return predictions, actuals, attn_weights, future_dict
 
     def _train_lstm(self, scaled_close, raw_close, progress_callback=None):
         """Training LSTM PyTorch sederhana sebagai pengganti TFT."""
