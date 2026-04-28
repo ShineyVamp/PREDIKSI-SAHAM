@@ -27,8 +27,8 @@ try:
         TemporalFusionTransformer,
         TimeSeriesDataSet,
     )
-    from pytorch_forecasting.data import GroupNormalizer, EncoderNormalizer
-    from pytorch_forecasting.metrics import QuantileLoss, MAE as PF_MAE
+    from pytorch_forecasting.data import GroupNormalizer, EncoderNormalizer, MultiNormalizer
+    from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, MAE as PF_MAE
     from torch.utils.data import DataLoader
     PF_AVAILABLE = True
 except ImportError:
@@ -131,7 +131,7 @@ class RealTFTModel:
             attention_head_size      = self.config["attention_head_size"],
             dropout                  = self.config["dropout"],
             hidden_continuous_size   = self.config["hidden_continuous_size"],
-            loss                     = QuantileLoss(self.config["quantiles"]),
+            loss                     = MultiLoss([QuantileLoss(self.config["quantiles"])] * 5),
             reduce_on_plateau_patience = 5,
             log_interval             = -1,
         )
@@ -208,7 +208,7 @@ class RealTFTModel:
             static_reals              = [],
             time_varying_known_reals  = known_reals,
             time_varying_unknown_reals = unknown_reals,
-            target_normalizer         = EncoderNormalizer(transformation="softplus"),
+            target_normalizer         = MultiNormalizer([EncoderNormalizer(transformation="softplus") for _ in range(5)]),
             add_relative_time_idx     = True,
             add_target_scales         = True,
             add_encoder_length        = True,
@@ -224,31 +224,27 @@ class RealTFTModel:
         return training_ds, validation_ds
 
     def _predict_backtest(self, val_loader):
-        """Prediksi pada data validasi untuk evaluasi backtest."""
-        preds = self.model.predict(val_loader, mode="prediction",
-                                   return_x=False, trainer_kwargs={"logger": False})
-        # Ambil median (quantile 0.5, index 2 dari [0.1,0.25,0.5,0.75,0.9])
-        if isinstance(preds, tuple):
-            preds = preds[0]
+        preds = self.model.predict(val_loader, mode="prediction", return_x=False, trainer_kwargs={"logger": False})
+        
+        # Ambil index 3 untuk 'close'
+        preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
+        preds_np = preds_close.cpu().numpy() if hasattr(preds_close, 'cpu') else np.array(preds_close)
 
-        preds_np = preds.cpu().numpy() if hasattr(preds, 'cpu') else np.array(preds)
-
-        # Flatten: ambil prediksi hari pertama dari setiap window untuk backtest
         if preds_np.ndim == 3:
-            preds_flat = preds_np[:, :, 2].flatten()  # index 2 = median
+            preds_flat = preds_np[:, 0, 2].flatten()
         elif preds_np.ndim == 2:
-            preds_flat = preds_np[:, 0]
+            preds_flat = preds_np[:, 0].flatten()
         else:
             preds_flat = preds_np.flatten()
 
-        # Ambil actuals dari val_loader
         actuals_list = []
         for batch in val_loader:
+            # y juga sekarang tuple berisi 5 target, kita ambil index 3 (close)
             y = batch[1][0] if isinstance(batch[1], (list, tuple)) else batch[1]
-            actuals_list.append(y.cpu().numpy())
+            y_close = y[3] if isinstance(y, (list, tuple)) else y
+            actuals_list.append(y_close[:, 0].cpu().numpy() if y_close.ndim >= 2 else y_close.cpu().numpy())
+            
         actuals_flat = np.concatenate(actuals_list).flatten()
-
-        # Samakan panjang
         min_len = min(len(preds_flat), len(actuals_flat))
         return preds_flat[:min_len], actuals_flat[:min_len]
 
@@ -290,28 +286,29 @@ class RealTFTModel:
         combined = pd.concat([last_seq, future_df], ignore_index=True).ffill().fillna(0)
         combined['ticker_id'] = str(TICKER_ID_MAP_STR.get(self.ticker, '0'))
 
-        try:
-            future_ds = TimeSeriesDataSet.from_dataset(
-                self._train_dataset, combined,
-                predict=True, stop_randomization=True
-            )
+      try:
+            future_ds = TimeSeriesDataSet.from_dataset(self._train_dataset, combined, predict=False, stop_randomization=True)
             future_loader = future_ds.to_dataloader(train=False, batch_size=1, num_workers=0)
-            future_preds  = self.model.predict(future_loader, mode="prediction",
-                                               trainer_kwargs={"logger": False})
-            if isinstance(future_preds, tuple):
-                future_preds = future_preds[0]
-            fp = future_preds.cpu().numpy() if hasattr(future_preds, 'cpu') else np.array(future_preds)
-            if fp.ndim == 3:
-                return fp[0, :, 2]  # median quantile
-            elif fp.ndim == 2:
-                return fp[0]
-            return fp.flatten()[:self.forecast_horizon]
+            future_preds  = self.model.predict(future_loader, mode="prediction", trainer_kwargs={"logger": False})
+            
+            # future_preds adalah list of 5 tensors
+            def extract_median(tensor_pred):
+                p = tensor_pred.cpu().numpy() if hasattr(tensor_pred, 'cpu') else np.array(tensor_pred)
+                if p.ndim == 3: return p[0, :, 2]
+                elif p.ndim == 2: return p[0]
+                return p.flatten()[:self.forecast_horizon]
+
+            return {
+                "open": extract_median(future_preds[0]),
+                "high": extract_median(future_preds[1]),
+                "low": extract_median(future_preds[2]),
+                "close": extract_median(future_preds[3]),
+                "volume": extract_median(future_preds[4])
+            }
         except Exception:
-            # Fallback ke simple projection jika dataset tidak bisa dibuat
+            # Fallback sederhana jika gagal
             last_close = df['close'].iloc[-1]
-            trend = df['close'].pct_change().tail(20).mean()
-            return np.array([last_close * (1 + trend) ** i
-                             for i in range(1, self.forecast_horizon + 1)])
+            return {k: np.array([last_close] * self.forecast_horizon) for k in ["open", "high", "low", "close", "volume"]}
 
     def _extract_attention(self, val_loader) -> dict:
         """Ekstrak variable importance dan temporal attention dari model."""
