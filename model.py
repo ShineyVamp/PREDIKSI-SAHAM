@@ -267,8 +267,10 @@ class RealTFTModel:
             'group_id': self.ticker,
         })
         # Isi known future features
+        last_date = df['date'].iloc[-1] if 'date' in df.columns else pd.Timestamp.now()
+        
         future_dates = pd.date_range(
-            start=df.index[-1] + pd.Timedelta(days=1) if hasattr(df, 'index') else pd.Timestamp.now(),
+            start=last_date + pd.Timedelta(days=1),
             periods=self.forecast_horizon, freq='B'
         )
         future_df['day_of_week']  = future_dates.dayofweek
