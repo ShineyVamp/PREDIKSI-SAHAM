@@ -26,7 +26,6 @@ torch>=2.1.0
 # ── TFT Model ───────────────────────────────────────────────────
 pytorch-forecasting>=1.0.0
 pytorch-lightning>=2.1.0
-lightning>=2.1.0
 
 # ── Optional: Tambahan performa ─────────────────────────────────
 # tensorboard>=2.14.0   # untuk logging training (opsional)
