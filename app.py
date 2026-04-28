@@ -260,7 +260,7 @@ if run_button:
     # ── 3. MODEL TRAINING ─────────────────────────────────────────────────
     st.markdown('<div class="section-title">03 · Model Training (TFT · MIMO)</div>', unsafe_allow_html=True)
 
-    cache_key = f"{ticker}_{forecast_days}_{max_epochs}_{learning_rate}"
+    cache_key = f"{ticker}_{forecast_days}_{max_epochs}_{learning_rate}_v2"
     cached = load_model_cache(cache_key) if use_cache else None
 
     if cached:
