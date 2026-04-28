@@ -30,42 +30,52 @@ try:
     from pytorch_forecasting.data.encoders import MultiNormalizer, EncoderNormalizer
     # ── BUGFIX PANDAS 2.0+ UNTUK MULTI-TARGET ─────────────────────────────────
     class SafeMultiNormalizer(MultiNormalizer):
-            """Patch manual untuk menghindari scikit-learn wrapper collision dan pandas KeyError"""
+            """Patch manual yang kebal terhadap scikit-learn wrapper dan argumen X"""
             
             def fit(self, y, X=None, **kwargs):
-                # 1. Konversi ke numpy murni
                 if isinstance(y, (pd.DataFrame, pd.Series)):
                     y = y.values
                 if y.ndim == 1:
                     y = y.reshape(-1, 1)
                     
-                # 2. Bypass super() - langsung eksekusi normalizer untuk masing-masing target
                 for idx, normalizer in enumerate(self.normalizers):
-                    if X is not None:
-                        normalizer.fit(y[:, idx], X)
-                    else:
+                    try:
+                        # Coba sertakan X (berguna jika nanti kamu memakai GroupNormalizer)
+                        if X is not None:
+                            normalizer.fit(y[:, idx], X)
+                        else:
+                            normalizer.fit(y[:, idx])
+                    except TypeError:
+                        # Jika menolak (seperti EncoderNormalizer), cukup beri y saja
                         normalizer.fit(y[:, idx])
                         
                 self.fitted_ = True
                 return self
     
             def transform(self, y, X=None, return_norm=False, target_scale=None, **kwargs):
-                # 1. Konversi ke numpy murni
                 if isinstance(y, (pd.DataFrame, pd.Series)):
                     y = y.values
                 if y.ndim == 1:
                     y = y.reshape(-1, 1)
                     
                 res = []
-                # 2. Bypass super() - loop manual ke setiap normalizer
                 for idx, normalizer in enumerate(self.normalizers):
-                    if target_scale is None:
-                        r = normalizer.transform(y[:, idx], X=X, return_norm=return_norm)
-                    else:
-                        r = normalizer.transform(y[:, idx], X=X, return_norm=return_norm, target_scale=target_scale[idx])
+                    ts = target_scale[idx] if target_scale is not None else None
+                    
+                    try:
+                        if ts is None:
+                            r = normalizer.transform(y[:, idx], X=X, return_norm=return_norm)
+                        else:
+                            r = normalizer.transform(y[:, idx], X=X, return_norm=return_norm, target_scale=ts)
+                    except TypeError:
+                        # Jika menolak argumen X, abaikan X
+                        if ts is None:
+                            r = normalizer.transform(y[:, idx], return_norm=return_norm)
+                        else:
+                            r = normalizer.transform(y[:, idx], return_norm=return_norm, target_scale=ts)
+                    
                     res.append(r)
                     
-                # 3. Format return persis seperti ekspektasi pytorch-forecasting
                 if return_norm:
                     return [r[0] for r in res], [r[1] for r in res]
                 return res
