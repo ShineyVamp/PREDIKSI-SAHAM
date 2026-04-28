@@ -358,7 +358,7 @@ if run_button:
     ))
     # Garis vertikal pemisah
     fig_main.add_vline(
-        x=featured_df.index[-1], line_dash="dash",
+        x=featured_df.index[-1].timestamp() * 1000, line_dash="dash",
         line_color="#f59e0b", line_width=1.5,
         annotation_text="  Today", annotation_font_color="#f59e0b"
     )
