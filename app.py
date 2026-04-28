@@ -329,7 +329,7 @@ if run_button:
 
     future_dates = pd.date_range(
         start=last_date + pd.Timedelta(days=1),
-        periods=len(future_pred), freq='B'
+        periods=len(future_pred['close']), freq='B'  # <--- Tambahkan ['close']
     )
 
     fig_main = go.Figure()
@@ -349,16 +349,15 @@ if run_button:
         line=dict(color='#3b82f6', width=2, dash='dot')
     ))
     # Prediksi masa depan
-    # Prediksi masa depan (menggunakan last_close dan last_date)
     fig_main.add_trace(go.Scatter(
         x=[last_date] + list(future_dates),
-        y=[last_close] + list(future_pred),
+        y=[last_close] + list(future_pred['close']), # <--- Tambahkan ['close']
         mode='lines', name=f'Forecast {forecast_days}H',
         line=dict(color='#00ff88', width=2.5)
     ))
     # Area bayangan uncertainty (±5%)
-    upper = [p * 1.05 for p in future_pred]
-    lower = [p * 0.95 for p in future_pred]
+    upper = [p * 1.05 for p in future_pred['close']] # <--- Tambahkan ['close']
+    lower = [p * 0.95 for p in future_pred['close']] # <--- Tambahkan ['close']
     fig_main.add_trace(go.Scatter(
         x=list(future_dates) + list(future_dates[::-1]),
         y=upper + lower[::-1],
@@ -395,9 +394,9 @@ if run_button:
         forecast_df = pd.DataFrame({
             'Tanggal':   future_dates.strftime('%Y-%m-%d'),
             'Prediksi (IDR)': [f"Rp {p:,.0f}" for p in future_pred['close']],
-            'Batas Atas': [f"Rp {p*1.05:,.0f}" for p in future_pred],
-            'Batas Bawah': [f"Rp {p*0.95:,.0f}" for p in future_pred],
-            'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred],
+            'Batas Atas': [f"Rp {p*1.05:,.0f}" for p in future_pred['close']], # <--- Tambahkan ['close']
+            'Batas Bawah': [f"Rp {p*0.95:,.0f}" for p in future_pred['close']], # <--- Tambahkan ['close']
+            'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred['close']], # <--- Tambahkan ['close']
         })
         st.dataframe(
             forecast_df, use_container_width=True, hide_index=True,
@@ -468,7 +467,7 @@ if run_button:
             
             # Hitung Proyeksi RSI dan Volatilitas Masa Depan
             # 1. Gabungkan data close historis dan prediksi masa depan
-            all_close = pd.concat([featured_df['close'], pd.Series(future_pred, index=future_dates)])
+            all_close = pd.concat([featured_df['close'], pd.Series(future_pred['close'], index=future_dates)]) # <--- Tambahkan ['close']
             
             # 2. Kalkulasi RSI Masa Depan
             delta = all_close.diff()
