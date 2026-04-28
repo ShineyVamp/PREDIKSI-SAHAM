@@ -27,7 +27,27 @@ try:
         TemporalFusionTransformer,
         TimeSeriesDataSet,
     )
-    from pytorch_forecasting.data import GroupNormalizer, EncoderNormalizer, MultiNormalizer
+    from pytorch_forecasting.data.encoders import MultiNormalizer, EncoderNormalizer
+    
+    # ── BUGFIX PANDAS 2.0+ UNTUK MULTI-TARGET ─────────────────────────────────
+    class SafeMultiNormalizer(MultiNormalizer):
+        """Patch untuk memperbaiki KeyError 'tuple not found' pada pandas >= 2.0"""
+        def fit(self, y, X=None):
+            for idx, normalizer in enumerate(self.normalizers):
+                # Gunakan .iloc untuk DataFrame agar kompatibel dengan Pandas 2.0+
+                if isinstance(y, pd.DataFrame):
+                    y_col = y.iloc[:, idx]
+                elif isinstance(y, (list, tuple)):
+                    y_col = y[idx]
+                else:
+                    y_col = y[:, idx]
+                    
+                if X is not None:
+                    normalizer.fit(y_col, X)
+                else:
+                    normalizer.fit(y_col)
+            self.fitted_ = True
+            return self
     from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, MAE as PF_MAE
     from torch.utils.data import DataLoader
     PF_AVAILABLE = True
@@ -131,7 +151,7 @@ class RealTFTModel:
             attention_head_size      = self.config["attention_head_size"],
             dropout                  = self.config["dropout"],
             hidden_continuous_size   = self.config["hidden_continuous_size"],
-            loss                     = MultiLoss([QuantileLoss(self.config["quantiles"])] * 5),
+            loss                     = MultiLoss([QuantileLoss(self.config["quantiles"]) for _ in range(5)]),
             reduce_on_plateau_patience = 5,
             log_interval             = -1,
         )
@@ -208,7 +228,7 @@ class RealTFTModel:
             static_reals              = [],
             time_varying_known_reals  = known_reals,
             time_varying_unknown_reals = unknown_reals,
-            target_normalizer         = MultiNormalizer([EncoderNormalizer(transformation="softplus") for _ in range(5)]),
+            target_normalizer         = SafeMultiNormalizer([EncoderNormalizer(transformation="softplus") for _ in range(5)]),
             add_relative_time_idx     = True,
             add_target_scales         = True,
             add_encoder_length        = True,
