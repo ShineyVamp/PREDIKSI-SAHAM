@@ -349,9 +349,10 @@ if run_button:
         line=dict(color='#3b82f6', width=2, dash='dot')
     ))
     # Prediksi masa depan
+    # Prediksi masa depan (menggunakan last_close dan last_date)
     fig_main.add_trace(go.Scatter(
-        x=list(dates_hist[-1:]) + list(future_dates),
-        y=[predictions[-1]] + list(future_pred),
+        x=[last_date] + list(future_dates),
+        y=[last_close] + list(future_pred),
         mode='lines', name=f'Forecast {forecast_days}H',
         line=dict(color='#00ff88', width=2.5)
     ))
@@ -396,7 +397,7 @@ if run_button:
             'Prediksi (IDR)': [f"Rp {p:,.0f}" for p in future_pred],
             'Batas Atas': [f"Rp {p*1.05:,.0f}" for p in future_pred],
             'Batas Bawah': [f"Rp {p*0.95:,.0f}" for p in future_pred],
-            'Change (%)': [f"{((p - future_pred[0])/future_pred[0]*100):+.2f}%" for p in future_pred],
+            'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred],
         })
         st.dataframe(
             forecast_df, use_container_width=True, hide_index=True,
