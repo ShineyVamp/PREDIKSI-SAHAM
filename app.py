@@ -1,8 +1,8 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║     TFT Stock Prediction - Web Analytics Dashboard                          ║
+║     TFT Stock Prediction - Web Analytics Dashboard                           ║
 ║     Temporal Fusion Transformer dengan strategi MIMO                         ║
-║     Top 5 Bank Indonesia                                                     
+║     Top 5 Bank Indonesia                                                     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -479,7 +479,9 @@ if run_button:
     all_rsi = 100 - (100 / (1 + rs))
     future_rsi = all_rsi[future_dates]
     
-    # 3. Kalkulasi Volatilitas Masa Depan
+    # 3. Kalkulasi Volatilitas Masa Depan & MA
+    future_ma20 = all_close.rolling(20).mean()[future_dates]
+    future_ma50 = all_close.rolling(50).mean()[future_dates]
     all_return = all_close.pct_change()
     all_vol = all_return.rolling(20).std()
     future_vol = all_vol[future_dates]
@@ -508,41 +510,58 @@ if run_button:
                 line=dict(color=color, width=1.5)
             ), row=1, col=1)
 
-    # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
     # --- 🛠️ INJEKSI VOLATILITAS UNTUK VISUALISASI CANDLESTICK REALISTIS ---
-            recent_vol = featured_df['close'].pct_change().tail(30).std()
-            
-            sim_open, sim_high, sim_low = [], [], []
-            prev_c = last_close
-            
-            for c in future_pred['close']:
-                # 1. Simulasikan lompatan harga buka (Market Gap)
-                gap_noise = prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
-                o = prev_c + gap_noise
-                
-                # 2. Simulasikan sumbu (Wicks) panjang/pendek
-                wick_h = c * np.random.uniform(0.001, recent_vol * 1.5)
-                wick_l = c * np.random.uniform(0.001, recent_vol * 1.5)
-                
-                h = max(o, c) + wick_h
-                l = min(o, c) - wick_l
-                
-                sim_open.append(o)
-                sim_high.append(h)
-                sim_low.append(l)
-                prev_c = c
+    recent_vol = featured_df['close'].pct_change().tail(30).std()
+    
+    sim_open, sim_high, sim_low = [], [], []
+    prev_c = last_close
+    
+    for c in future_pred['close']:
+        # 1. Simulasikan lompatan harga buka (Market Gap)
+        gap_noise = prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
+        o = prev_c + gap_noise
+        
+        # 2. Simulasikan sumbu (Wicks) panjang/pendek
+        wick_h = c * np.random.uniform(0.001, recent_vol * 1.5)
+        wick_l = c * np.random.uniform(0.001, recent_vol * 1.5)
+        
+        h = max(o, c) + wick_h
+        l = min(o, c) - wick_l
+        
+        sim_open.append(o)
+        sim_high.append(h)
+        sim_low.append(l)
+        prev_c = c
 
-            # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
-            fig_tech.add_trace(go.Candlestick(
-                x=future_dates,
-                open=sim_open,
-                high=sim_high,
-                low=sim_low,
-                close=future_pred['close'], # <--- Tren absolut tetap setia pada prediksi AI
-                name='Forecast OHLC', 
-                increasing_line_color='rgba(0, 255, 136, 0.85)', 
-                decreasing_line_color='rgba(239, 68, 68, 0.85)'  
-            ), row=1, col=1)
+    # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
+    fig_tech.add_trace(go.Candlestick(
+        x=future_dates,
+        open=sim_open,
+        high=sim_high,
+        low=sim_low,
+        close=future_pred['close'], # <--- Tren absolut tetap setia pada prediksi AI
+        name='Forecast OHLC', 
+        increasing_line_color='rgba(0, 255, 136, 0.85)', 
+        decreasing_line_color='rgba(239, 68, 68, 0.85)'  
+    ), row=1, col=1)
+
+    # PROYEKSI ROW 1: MA MASA DEPAN
+    last_ma20 = featured_df['ma_20'].iloc[-1]
+    fig_tech.add_trace(go.Scatter(
+        x=[last_date] + list(future_dates),
+        y=[last_ma20] + list(future_ma20),
+        mode='lines', name='Forecast MA20',
+        line=dict(color='#f59e0b', width=1.5, dash='dot')
+    ), row=1, col=1)
+
+    last_ma50 = featured_df['ma_50'].iloc[-1]
+    fig_tech.add_trace(go.Scatter(
+        x=[last_date] + list(future_dates),
+        y=[last_ma50] + list(future_ma50),
+        mode='lines', name='Forecast MA50',
+        line=dict(color='#3b82f6', width=1.5, dash='dot')
+    ), row=1, col=1)
+
     # --- ROW 2: RSI HISTORIS ---
     if 'rsi' in plot_df.columns:
         fig_tech.add_trace(go.Scatter(
