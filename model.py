@@ -256,7 +256,7 @@ class RealTFTModel:
         training_ds = TimeSeriesDataSet(
             df[df['time_idx'] <= val_cutoff],
             time_idx                  = "time_idx",
-            target                    = ["open", "high", "low", "close", "volume"], # <--- UBAH JADI 5 TARGET
+            target                    = ["open", "high", "low", "close", "log_volume"], # <--- UBAH DI SINI JUGA
             group_ids                 = ["group_id"],
             min_encoder_length        = enc_len // 2,
             max_encoder_length        = enc_len,
@@ -361,7 +361,8 @@ class RealTFTModel:
                 "high": extract_median(future_preds[1]),
                 "low": extract_median(future_preds[2]),
                 "close": extract_median(future_preds[3]),
-                "volume": extract_median(future_preds[4])
+                # Kembalikan log_volume ke angka jutaan aslinya menggunakan fungsi eksponensial (np.exp)
+                "volume": np.exp(extract_median(future_preds[4])) - 1 
             }
         except Exception:
             # Fallback sederhana jika gagal
