@@ -2,7 +2,7 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║     TFT Stock Prediction - Web Analytics Dashboard                          ║
 ║     Temporal Fusion Transformer dengan strategi MIMO                         ║
-║     Top 5 Bank Indonesia                                                     ║
+║     Top 5 Bank Indonesia                                                     
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
