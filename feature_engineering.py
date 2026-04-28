@@ -248,7 +248,7 @@ def get_feature_groups() -> dict:
     """
     return {
         # Kolom target yang diprediksi
-        "target": "close",
+        "target": ["open", "high", "low", "close", "volume"],
 
         # Static covariates — tidak berubah terhadap waktu
         "static_categoricals": ["ticker_id"],
