@@ -30,17 +30,19 @@ try:
     from pytorch_forecasting.data.encoders import MultiNormalizer, EncoderNormalizer
     # ── BUGFIX PANDAS 2.0+ UNTUK MULTI-TARGET ─────────────────────────────────
     class SafeMultiNormalizer(MultiNormalizer):
-        """Patch untuk memperbaiki KeyError 'tuple not found' pada pandas >= 2.0"""
-        def fit(self, y, X=None):
-            # Konversi DataFrame/Series menjadi format numpy murni sebelum diproses
+        """Patch untuk memperbaiki KeyError dan X collision pada pandas >= 2.0"""
+        
+        def fit(self, y, *args, **kwargs):
+            # Jika y berupa DataFrame/Series, ubah ke NumPy murni agar slicing [:, idx] aman
             if isinstance(y, (pd.DataFrame, pd.Series)): 
                 y = y.values
-            return super().fit(y, X)
+            # Lempar ke fungsi asli tanpa menyebutkan nama argumen 'X'
+            return super().fit(y, *args, **kwargs)
     
-        def transform(self, y, X=None, return_norm=False, target_scale=None):
+        def transform(self, y, *args, **kwargs):
             if isinstance(y, (pd.DataFrame, pd.Series)): 
                 y = y.values
-            return super().transform(y, X=X, return_norm=return_norm, target_scale=target_scale)
+            return super().transform(y, *args, **kwargs)
     from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, MAE as PF_MAE
     from torch.utils.data import DataLoader
     PF_AVAILABLE = True
