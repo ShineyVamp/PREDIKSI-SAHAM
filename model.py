@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 
 # ── Cek ketersediaan pytorch-forecasting, fallback ke mode simulasi ────────
 try:
-    import pytorch_lightning as pl
+    import lightning.pytorch as pl
     from pytorch_forecasting import (
         TemporalFusionTransformer,
         TimeSeriesDataSet,
