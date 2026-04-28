@@ -174,7 +174,7 @@ class RealTFTModel:
 
         # Pastikan semua kolom numerik tidak ada NaN
         numeric_cols = result.select_dtypes(include=[np.number]).columns
-        result[numeric_cols] = result[numeric_cols].fillna(method='ffill').fillna(0)
+        result[numeric_cols] = result[numeric_cols].ffill().fillna(0)
 
         # Pastikan ticker_id adalah string untuk categorical
         result['ticker_id'] = result['ticker_id'].astype(str)
@@ -287,7 +287,7 @@ class RealTFTModel:
         future_df['week_sin']  = np.sin(2 * np.pi * future_df['week_of_year'] / 52)
         future_df['week_cos']  = np.cos(2 * np.pi * future_df['week_of_year'] / 52)
 
-        combined = pd.concat([last_seq, future_df], ignore_index=True).fillna(method='ffill').fillna(0)
+        combined = pd.concat([last_seq, future_df], ignore_index=True).ffill().fillna(0)
         combined['ticker_id'] = str(TICKER_ID_MAP_STR.get(self.ticker, '0'))
 
         try:
@@ -474,7 +474,7 @@ class FallbackTFTModel:
                 progress_callback(epoch, self.max_epochs, fake_loss)
 
         # Prediksi backtest: MA20 + noise
-        ma20 = pd.Series(close).rolling(20).mean().fillna(method='bfill').values
+        ma20 = pd.Series(close).rolling(20).mean().bfill().values
         noise_std  = np.std(close) * 0.02
         preds_back = ma20[n_train:] + np.random.normal(0, noise_std, n - n_train)
         actuals    = close[n_train:]
