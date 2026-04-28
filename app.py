@@ -509,17 +509,40 @@ if run_button:
             ), row=1, col=1)
 
     # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
-    fig_tech.add_trace(go.Candlestick(
-        x=future_dates,
-        open=future_pred['open'],
-        high=future_pred['high'],
-        low=future_pred['low'],
-        close=future_pred['close'],
-        name='Forecast OHLC', 
-        increasing_line_color='rgba(0, 255, 136, 0.5)', # Warna hijau transparan
-        decreasing_line_color='rgba(239, 68, 68, 0.5)'  # Warna merah transparan
-    ), row=1, col=1)
-        
+    # --- 🛠️ INJEKSI VOLATILITAS UNTUK VISUALISASI CANDLESTICK REALISTIS ---
+            recent_vol = featured_df['close'].pct_change().tail(30).std()
+            
+            sim_open, sim_high, sim_low = [], [], []
+            prev_c = last_close
+            
+            for c in future_pred['close']:
+                # 1. Simulasikan lompatan harga buka (Market Gap)
+                gap_noise = prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
+                o = prev_c + gap_noise
+                
+                # 2. Simulasikan sumbu (Wicks) panjang/pendek
+                wick_h = c * np.random.uniform(0.001, recent_vol * 1.5)
+                wick_l = c * np.random.uniform(0.001, recent_vol * 1.5)
+                
+                h = max(o, c) + wick_h
+                l = min(o, c) - wick_l
+                
+                sim_open.append(o)
+                sim_high.append(h)
+                sim_low.append(l)
+                prev_c = c
+
+            # PROYEKSI ROW 1: CANDLESTICK MASA DEPAN
+            fig_tech.add_trace(go.Candlestick(
+                x=future_dates,
+                open=sim_open,
+                high=sim_high,
+                low=sim_low,
+                close=future_pred['close'], # <--- Tren absolut tetap setia pada prediksi AI
+                name='Forecast OHLC', 
+                increasing_line_color='rgba(0, 255, 136, 0.85)', 
+                decreasing_line_color='rgba(239, 68, 68, 0.85)'  
+            ), row=1, col=1)
     # --- ROW 2: RSI HISTORIS ---
     if 'rsi' in plot_df.columns:
         fig_tech.add_trace(go.Scatter(
