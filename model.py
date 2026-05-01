@@ -286,10 +286,13 @@ class RealTFTModel:
         Prediksi backtest dengan inverse-transform ke skala harga asli (IDR).
         Menggunakan mode='raw' agar kita bisa akses target_scale untuk denormalisasi.
         """
-        raw_output, x = self.model.predict(
+        predict_result = self.model.predict(
             val_loader, mode="raw", return_x=True,
             trainer_kwargs={"logger": False}
         )
+        # pytorch-forecasting returns (output, x) or (output, x, index) depending on version
+        raw_output = predict_result[0]
+        x          = predict_result[1]
 
         # ── Ambil prediksi close (index 3) pada quantile median (index 2) ──
         # raw_output["prediction"] shape: list of 5 tensors, each (batch, horizon, n_quantiles)
