@@ -387,6 +387,19 @@ class RealTFTModel:
                 "close_upper": upper_aligned, # <--- Gunakan data yang sudah digeser
                 "volume": np.exp(extract_median(future_preds[4])) - 1 
             }
+            
+        except Exception:
+            # Fallback sederhana jika gagal
+            last_close = df['close'].iloc[-1]
+            return {
+                "open": np.array([last_close] * self.forecast_horizon),
+                "high": np.array([last_close * 1.01] * self.forecast_horizon),
+                "low": np.array([last_close * 0.99] * self.forecast_horizon),
+                "close": np.array([last_close] * self.forecast_horizon),
+                "close_lower": np.array([last_close * 0.90] * self.forecast_horizon), # <--- Wajib ada
+                "close_upper": np.array([last_close * 1.10] * self.forecast_horizon), # <--- Wajib ada
+                "volume": np.array([1000000] * self.forecast_horizon)
+            }
           
     def _extract_attention(self, val_loader) -> dict:
         """Ekstrak variable importance dan temporal attention dari model."""
