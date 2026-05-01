@@ -283,13 +283,9 @@ class RealTFTModel:
     def _predict_backtest(self, val_loader):
         """
         Prediksi backtest dalam skala harga asli (IDR).
-
-        mode='prediction' di pytorch-forecasting SUDAH mengembalikan nilai
-        yang ter-denormalisasi (harga asli). Untuk actuals, kita denormalisasi
-        manual dari tiap batch menggunakan target_scale yang tersimpan di x.
-        Ambil hanya step pertama (hari ke-1) tiap window agar MAE != RMSE.
+        Mengambil label aktual langsung dari dictionary X agar kebal dari error normalizer.
         """
-        # ── 1. Prediksi — sudah dalam skala harga asli ──────────────────────
+        # 1. Ambil Prediksi
         preds = self.model.predict(
             val_loader, mode="prediction", return_x=False,
             trainer_kwargs={"logger": False}
@@ -298,33 +294,28 @@ class RealTFTModel:
         preds_np    = preds_close.cpu().numpy() if hasattr(preds_close, "cpu") else np.array(preds_close)
 
         if preds_np.ndim == 3:
-            preds_day1 = preds_np[:, 0, 2]   # (n_samples,) quantile median
+            preds_day1 = preds_np[:, 0, 2]   # Kuantil Median
         elif preds_np.ndim == 2:
             preds_day1 = preds_np[:, 0]
         else:
             preds_day1 = preds_np.flatten()
 
-        # ── 2. Actuals — denormalisasi dari setiap batch ─────────────────────
+        # 2. Ambil Actuals (Tanpa denormalisasi manual, langsung ambil harga asli!)
         actuals_list = []
         for batch in val_loader:
             x_batch = batch[0]
-            y_batch = batch[1][0] if isinstance(batch[1], (list, tuple)) else batch[1]
-            y_close = y_batch[3] if isinstance(y_batch, (list, tuple)) else y_batch
-            y_norm  = y_close[:, 0].cpu().numpy()   # hari ke-1, masih ternormalisasi
-
-            try:
-                ts      = x_batch["target_scale"]
-                ts_np   = (ts[3] if isinstance(ts, (list, tuple)) else ts).cpu().numpy()
-                center  = ts_np[:, 0]
-                scale   = ts_np[:, 1]
-                y_real  = np.log1p(np.exp(y_norm)) * scale + center
-            except Exception:
-                y_real  = y_norm
-
-            actuals_list.append(y_real)
+            # decoder_target adalah fitur PyTorch yang menyimpan data murni sebelum di-scale
+            dec_target = x_batch.get("decoder_target", None)
+            
+            if dec_target is not None:
+                y_unscaled = dec_target[3] if isinstance(dec_target, (list, tuple)) else dec_target
+                actuals_list.append(y_unscaled[:, 0].cpu().numpy())
+            else:
+                actuals_list.append(np.zeros(len(x_batch["time_idx"])))
 
         actuals_day1 = np.concatenate(actuals_list).flatten()
         min_len = min(len(preds_day1), len(actuals_day1))
+        
         return preds_day1[:min_len], actuals_day1[:min_len]
 
     def _predict_future(self, df: pd.DataFrame) -> np.ndarray:
