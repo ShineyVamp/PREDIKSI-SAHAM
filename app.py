@@ -302,10 +302,14 @@ if run_button:
             st.error(f"Training gagal: {e}")
             import traceback; st.code(traceback.format_exc())
             st.stop()
-
+            
     # ── 4. EVALUATION METRICS ─────────────────────────────────────────────
     st.markdown('<div class="section-title">04 · Evaluation Metrics</div>', unsafe_allow_html=True)
-    metrics = evaluate_predictions(actuals, predictions)
+    
+    act_flat = np.array(actuals).flatten()
+    pred_flat = np.array(predictions).flatten()
+    
+    metrics = evaluate_predictions(act_flat, pred_flat)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("MAE",  f"{metrics['MAE']:.2f}")
