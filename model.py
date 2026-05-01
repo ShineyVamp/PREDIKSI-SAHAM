@@ -356,12 +356,18 @@ class RealTFTModel:
                 elif p.ndim == 2: return p[0]
                 return p.flatten()[:self.forecast_horizon]
 
+            # Kuantil 0 (index 0) = Skenario terburuk / batas bawah 10%
+            # Kuantil 4 (index 4) = Skenario terbaik / batas atas 90%
+            lower_bound = future_preds[3][0, :, 0].cpu().numpy()
+            upper_bound = future_preds[3][0, :, 4].cpu().numpy()
+
             return {
                 "open": extract_median(future_preds[0]),
                 "high": extract_median(future_preds[1]),
                 "low": extract_median(future_preds[2]),
                 "close": extract_median(future_preds[3]),
-                # Kembalikan log_volume ke angka jutaan aslinya menggunakan fungsi eksponensial (np.exp)
+                "close_lower": lower_bound,  # <--- Injeksi QuantileLoss Bawah
+                "close_upper": upper_bound,  # <--- Injeksi QuantileLoss Atas
                 "volume": np.exp(extract_median(future_preds[4])) - 1 
             }
         except Exception:
@@ -447,11 +453,14 @@ class FallbackTFTModel:
         attn_weights = _mock_attention_weights(self.ticker)
         
         # --- UBAH ARRAY JADI DICTIONARY AGAR APP.PY TIDAK ERROR ---
+        # --- MODEL CADANGAN ---
         future_dict = {
             "open": future_pred,
             "high": future_pred * 1.01,
             "low": future_pred * 0.99,
             "close": future_pred,
+            "close_lower": future_pred * 0.90, # Fallback batas bawah
+            "close_upper": future_pred * 1.10, # Fallback batas atas
             "volume": np.array([1000000] * len(future_pred))
         }
         
