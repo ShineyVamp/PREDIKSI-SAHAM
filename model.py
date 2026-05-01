@@ -288,19 +288,21 @@ class RealTFTModel:
         preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
         preds_np = preds_close.cpu().numpy() if hasattr(preds_close, 'cpu') else np.array(preds_close)
 
+        # 🛠️ BUGFIX: Ubah angka 0 menjadi titik dua (:) agar mengambil SELURUH HARI (30 Hari)
         if preds_np.ndim == 3:
-            preds_flat = preds_np[:, 0, 2].flatten()
+            preds_flat = preds_np[:, :, 2].flatten() # Semua Batch, Semua Hari, Median
         elif preds_np.ndim == 2:
-            preds_flat = preds_np[:, 0].flatten()
+            preds_flat = preds_np[:, :].flatten()    # Semua Batch, Semua Hari
         else:
             preds_flat = preds_np.flatten()
 
         actuals_list = []
         for batch in val_loader:
-            # y juga sekarang tuple berisi 5 target, kita ambil index 3 (close)
             y = batch[1][0] if isinstance(batch[1], (list, tuple)) else batch[1]
             y_close = y[3] if isinstance(y, (list, tuple)) else y
-            actuals_list.append(y_close[:, 0].cpu().numpy() if y_close.ndim >= 2 else y_close.cpu().numpy())
+            
+            act_vals = y_close[:, :].cpu().numpy() if y_close.ndim >= 2 else y_close.cpu().numpy()
+            actuals_list.append(act_vals)
             
         actuals_flat = np.concatenate(actuals_list).flatten()
         min_len = min(len(preds_flat), len(actuals_flat))
