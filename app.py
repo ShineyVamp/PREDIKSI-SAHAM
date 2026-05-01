@@ -241,9 +241,9 @@ if run_button:
     with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
         try:
             raw_df = fetch_stock_data(ticker, period_years=5)
-            st.markdown(f'<div class="info-box">✅ Berhasil mengambil <b>{len(raw_df):,}</b> baris data historis untuk <b>{ticker}</b> ({raw_df.index.min().date()} → {raw_df.index.max().date()})</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="info-box">Berhasil mengambil <b>{len(raw_df):,}</b> baris data historis untuk <b>{ticker}</b> ({raw_df.index.min().date()} → {raw_df.index.max().date()})</div>', unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"❌ Gagal mengambil data: {e}")
+            st.error(f"Gagal mengambil data: {e}")
             st.stop()
 
     # ── 2. FEATURE ENGINEERING ────────────────────────────────────────────
@@ -252,9 +252,9 @@ if run_button:
         try:
             featured_df = build_features(raw_df, ticker)
             n_features = len(featured_df.columns)
-            st.markdown(f'<div class="info-box">✅ Feature engineering selesai: <b>{n_features}</b> fitur dibuat (teknis + temporal + static covariates)</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="info-box">Feature engineering selesai: <b>{n_features}</b> fitur dibuat (teknis + temporal + static covariates)</div>', unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"❌ Feature engineering gagal: {e}")
+            st.error(f"Feature engineering gagal: {e}")
             st.stop()
 
     # ── 3. MODEL TRAINING ─────────────────────────────────────────────────
@@ -264,7 +264,7 @@ if run_button:
     cached = load_model_cache(cache_key) if use_cache else None
 
     if cached:
-        st.markdown('<div class="warn-box">⚡ Model dimuat dari cache — melewati training.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="warn-box">Model dimuat dari cache — melewati training.</div>', unsafe_allow_html=True)
         tft_model    = cached["model"]
         predictions  = cached["predictions"]
         actuals      = cached["actuals"]
@@ -290,7 +290,7 @@ if run_button:
                 featured_df,
                 progress_callback=_progress_callback
             )
-            progress_bar.progress(100, text="Training selesai ✅")
+            progress_bar.progress(100, text="Training selesai")
             status_box.empty()
 
             save_model_cache(cache_key, {
@@ -299,7 +299,7 @@ if run_button:
                 "future": future_pred
             })
         except Exception as e:
-            st.error(f"❌ Training gagal: {e}")
+            st.error(f"Training gagal: {e}")
             import traceback; st.code(traceback.format_exc())
             st.stop()
 
