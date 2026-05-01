@@ -361,8 +361,9 @@ if run_button:
     ))
     # Area bayangan uncertainty (±5%)
     # Area bayangan uncertainty (DIAMBIL LANGSUNG DARI QUANTILE LOSS)
-    upper = future_pred['close_upper']
-    lower = future_pred['close_lower']
+    # Wajib dibungkus list() agar tidak memicu matematika Numpy!
+    upper = list(future_pred['close_upper'])
+    lower = list(future_pred['close_lower'])
     fig_main.add_trace(go.Scatter(
         x=list(future_dates) + list(future_dates[::-1]),
         y=upper + lower[::-1],
