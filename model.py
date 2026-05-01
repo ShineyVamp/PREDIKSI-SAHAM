@@ -361,29 +361,33 @@ class RealTFTModel:
             # Kuantil 4 (index 4) = Skenario terbaik / batas atas 90%
             lower_bound = future_preds[3][0, :, 0].cpu().numpy()
             upper_bound = future_preds[3][0, :, 4].cpu().numpy()
+            
+            # Ekstrak nilai tengah (Close)
+            close_pred = extract_median(future_preds[3])
+
+            # --- 🛠️ RESIDUAL ALIGNMENT (Mencegah Prediksi Loncat) ---
+            # 1. Ambil harga riil penutupan terakhir di bursa
+            last_actual_close = df['close'].iloc[-1]
+            
+            # 2. Hitung selisih (bias) antara tebakan pertama AI dengan harga riil
+            bias = last_actual_close - close_pred[0]
+            
+            # 3. Geser seluruh titik kurva berdasarkan bias tersebut agar menyambung mulus
+            close_aligned = close_pred + bias
+            lower_aligned = lower_bound + bias
+            upper_aligned = upper_bound + bias
+            # ---------------------------------------------------------
 
             return {
-                "open": extract_median(future_preds[0]),
-                "high": extract_median(future_preds[1]),
-                "low": extract_median(future_preds[2]),
-                "close": extract_median(future_preds[3]),
-                "close_lower": lower_bound,  # <--- Injeksi QuantileLoss Bawah
-                "close_upper": upper_bound,  # <--- Injeksi QuantileLoss Atas
+                "open": extract_median(future_preds[0]) + bias, 
+                "high": extract_median(future_preds[1]) + bias,
+                "low": extract_median(future_preds[2]) + bias,
+                "close": close_aligned,      # <--- Gunakan data yang sudah digeser
+                "close_lower": lower_aligned, # <--- Gunakan data yang sudah digeser
+                "close_upper": upper_aligned, # <--- Gunakan data yang sudah digeser
                 "volume": np.exp(extract_median(future_preds[4])) - 1 
             }
-        except Exception:
-            # Fallback sederhana jika gagal
-            last_close = df['close'].iloc[-1]
-            return {
-                "open": np.array([last_close] * self.forecast_horizon),
-                "high": np.array([last_close * 1.01] * self.forecast_horizon),
-                "low": np.array([last_close * 0.99] * self.forecast_horizon),
-                "close": np.array([last_close] * self.forecast_horizon),
-                "close_lower": np.array([last_close * 0.90] * self.forecast_horizon), # <--- Wajib ada
-                "close_upper": np.array([last_close * 1.10] * self.forecast_horizon), # <--- Wajib ada
-                "volume": np.array([1000000] * self.forecast_horizon)
-            }
-
+          
     def _extract_attention(self, val_loader) -> dict:
         """Ekstrak variable importance dan temporal attention dari model."""
         try:
