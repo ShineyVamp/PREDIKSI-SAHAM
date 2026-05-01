@@ -303,21 +303,18 @@ if run_button:
             import traceback; st.code(traceback.format_exc())
             st.stop()
             
-    # ── 4. EVALUATION METRICS ─────────────────────────────────────────────
+     # ── 4. EVALUATION METRICS ─────────────────────────────────────────────
     st.markdown('<div class="section-title">04 · Evaluation Metrics</div>', unsafe_allow_html=True)
     
-    # Ambil data Close saja secara aman tanpa flatten yang merusak perhitungan
-    act_close = actuals[3] if isinstance(actuals, (list, tuple)) and len(actuals) >= 4 else actuals
-    pred_close = predictions[3] if isinstance(predictions, (list, tuple)) and len(predictions) >= 4 else predictions
-
-    if hasattr(act_close, 'cpu'): act_close = act_close.cpu().numpy()
-    if hasattr(pred_close, 'cpu'): pred_close = pred_close.cpu().numpy()
+    # Pastikan formatnya Numpy Array 1 Dimensi yang bersih
+    act_close = np.array(actuals).flatten()
+    pred_close = np.array(predictions).flatten()
 
     # Dapatkan metrics dasar
     metrics = evaluate_predictions(act_close, pred_close)
 
     # TAMPILKAN HANYA 3 KOTAK (TANPA R2)
-    col1, col2, col3 = st.columns(3) # <--- Ubah menjadi 3 kolom saja
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("MAE", f"{metrics.get('MAE', 0):.2f}")
     with col2:
