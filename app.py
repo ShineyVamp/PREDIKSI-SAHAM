@@ -194,7 +194,7 @@ with st.sidebar:
     forecast_days = st.slider("Hari ke depan", min_value=7, max_value=30, value=30, step=7)
 
     st.markdown('<div class="section-title">Konfigurasi Model</div>', unsafe_allow_html=True)
-    max_epochs = st.slider("Max Epochs", 10, 100, 50, 10)
+    max_epochs = st.slider("Max Epochs", 1, 100, 50, 10)
     learning_rate = st.select_slider(
         "Learning Rate",
         options=[0.0001, 0.0003, 0.001, 0.003, 0.01],
