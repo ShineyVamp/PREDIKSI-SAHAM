@@ -306,10 +306,26 @@ if run_button:
     # ── 4. EVALUATION METRICS ─────────────────────────────────────────────
     st.markdown('<div class="section-title">04 · Evaluation Metrics</div>', unsafe_allow_html=True)
     
-    act_flat = np.array(actuals).flatten()
-    pred_flat = np.array(predictions).flatten()
-    
-    metrics = evaluate_predictions(act_flat, pred_flat)
+    # 🛠️ EKSTRAKSI KHUSUS MULTI-TARGET (Ambil data Close saja)
+    # actuals dan predictions dari PyTorch MIMO biasanya berupa Tuple isi 5 (OHLCV)
+    act_close = actuals[3] if isinstance(actuals, (list, tuple)) and len(actuals) == 5 else actuals
+    pred_close = predictions[3] if isinstance(predictions, (list, tuple)) and len(predictions) == 5 else predictions
+
+    # Fungsi pembersih tensor dan pengambil median kuantil
+    def clean_backtest_data(arr):
+        if hasattr(arr, 'cpu'): arr = arr.cpu().numpy()
+        arr = np.array(arr)
+        if arr.ndim == 3: return arr[:, :, 2].flatten() # Ambil kuantil 0.5 (Median)
+        return arr.flatten()
+
+    act_flat = clean_backtest_data(act_close)
+    pred_flat = clean_backtest_data(pred_close)
+
+    # Antisipasi jika panjang array berbeda 1-2 poin karena efek batch
+    min_len = min(len(act_flat), len(pred_flat))
+    act_flat, pred_flat = act_flat[-min_len:], pred_flat[-min_len:]
+
+    metrics = evaluate_predictions(act_flat, pred_flat)        
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("MAE",  f"{metrics['MAE']:.2f}")
