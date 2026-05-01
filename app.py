@@ -260,7 +260,7 @@ if run_button:
     # ── 3. MODEL TRAINING ─────────────────────────────────────────────────
     st.markdown('<div class="section-title">03 · Model Training (TFT · MIMO)</div>', unsafe_allow_html=True)
 
-    cache_key = f"{ticker}_{forecast_days}_{max_epochs}_{learning_rate}_v2"
+    cache_key = f"{ticker}_{forecast_days}_{max_epochs}_{learning_rate}_v3"
     cached = load_model_cache(cache_key) if use_cache else None
 
     if cached:
@@ -356,8 +356,9 @@ if run_button:
         line=dict(color='#00ff88', width=2.5)
     ))
     # Area bayangan uncertainty (±5%)
-    upper = [p * 1.05 for p in future_pred['close']] # <--- Tambahkan ['close']
-    lower = [p * 0.95 for p in future_pred['close']] # <--- Tambahkan ['close']
+    # Area bayangan uncertainty (DIAMBIL LANGSUNG DARI QUANTILE LOSS)
+    upper = future_pred['close_upper']
+    lower = future_pred['close_lower']
     fig_main.add_trace(go.Scatter(
         x=list(future_dates) + list(future_dates[::-1]),
         y=upper + lower[::-1],
@@ -394,9 +395,9 @@ if run_button:
         forecast_df = pd.DataFrame({
             'Tanggal':   future_dates.strftime('%Y-%m-%d'),
             'Prediksi (IDR)': [f"Rp {p:,.0f}" for p in future_pred['close']],
-            'Batas Atas': [f"Rp {p*1.05:,.0f}" for p in future_pred['close']], # <--- Tambahkan ['close']
-            'Batas Bawah': [f"Rp {p*0.95:,.0f}" for p in future_pred['close']], # <--- Tambahkan ['close']
-            'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred['close']], # <--- Tambahkan ['close']
+            'Batas Atas': [f"Rp {p:,.0f}" for p in future_pred['close_upper']], # <--- Gunakan data dari AI
+            'Batas Bawah': [f"Rp {p:,.0f}" for p in future_pred['close_lower']], # <--- Gunakan data dari AI
+            'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred['close']],
         })
         st.dataframe(
             forecast_df, use_container_width=True, hide_index=True,
