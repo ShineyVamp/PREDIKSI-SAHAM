@@ -347,7 +347,8 @@ class RealTFTModel:
         try:
             future_ds = TimeSeriesDataSet.from_dataset(self._train_dataset, combined, predict=False, stop_randomization=True)
             future_loader = future_ds.to_dataloader(train=False, batch_size=1, num_workers=0)
-            future_preds  = self.model.predict(future_loader, mode="prediction", trainer_kwargs={"logger": False})
+            # UBAH MODE JADI 'quantiles' AGAR DATA BATAS ATAS/BAWAH TIDAK DIBUANG
+            future_preds  = self.model.predict(future_loader, mode="quantiles", trainer_kwargs={"logger": False})
             
             # future_preds adalah list of 5 tensors
             def extract_median(tensor_pred):
