@@ -248,7 +248,6 @@ class RealTFTModel:
 
         fg = self.feature_groups
 
-        # Ambil hanya kolom yang benar-benar ada di df
         known_reals   = [c for c in fg["time_varying_known_reals"]    if c in df.columns]
         unknown_reals = [c for c in fg["time_varying_unknown_reals"]  if c in df.columns]
         static_cats   = [c for c in fg["static_categoricals"]         if c in df.columns]
@@ -256,7 +255,7 @@ class RealTFTModel:
         training_ds = TimeSeriesDataSet(
             df[df['time_idx'] <= val_cutoff],
             time_idx                  = "time_idx",
-            target                    = ["open", "high", "low", "close", "log_volume"], # <--- UBAH DI SINI JUGA
+            target                    = ["open", "high", "low", "close", "log_volume"],
             group_ids                 = ["group_id"],
             min_encoder_length        = enc_len // 2,
             max_encoder_length        = enc_len,
@@ -275,7 +274,7 @@ class RealTFTModel:
         validation_ds = TimeSeriesDataSet.from_dataset(
             training_ds,
             df,
-            predict=True,
+            predict=False,  # 🚨 BUGFIX 1: WAJIB FALSE agar data tidak dicekik sisa 1 hari!
             stop_randomization=True,
         )
 
