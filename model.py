@@ -282,30 +282,61 @@ class RealTFTModel:
         return training_ds, validation_ds
 
     def _predict_backtest(self, val_loader):
-        preds = self.model.predict(val_loader, mode="prediction", return_x=False, trainer_kwargs={"logger": False})
-        
-        # Ambil index 3 untuk 'close'
-        preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
-        preds_np = preds_close.cpu().numpy() if hasattr(preds_close, 'cpu') else np.array(preds_close)
+        """
+        Prediksi backtest dengan inverse-transform ke skala harga asli (IDR).
+        Menggunakan mode='raw' agar kita bisa akses target_scale untuk denormalisasi.
+        """
+        raw_output, x = self.model.predict(
+            val_loader, mode="raw", return_x=True,
+            trainer_kwargs={"logger": False}
+        )
 
-        # Take only step-0 prediction from each batch window
+        # ── Ambil prediksi close (index 3) pada quantile median (index 2) ──
+        # raw_output["prediction"] shape: list of 5 tensors, each (batch, horizon, n_quantiles)
+        preds_tensor = raw_output["prediction"]
+        preds_close  = preds_tensor[3]   # close target
+        preds_np     = preds_close.cpu().numpy()  # (n_samples, horizon, n_quantiles)
+
+        # Ambil hanya hari ke-1 (step 0), quantile median (index 2)
         if preds_np.ndim == 3:
-            preds_flat = preds_np[:, 0, 2].flatten()   # only day-1 forecast, median quantile
-        elif preds_np.ndim == 2:
-            preds_flat = preds_np[:, 0].flatten()       # only day-1 forecast
+            preds_step0 = preds_np[:, 0, 2]   # shape: (n_samples,)
+        else:
+            preds_step0 = preds_np[:, 0]
 
+        # ── Inverse-transform menggunakan target_scale dari encoder ──
+        # target_scale shape: (n_samples, 2) → [center, scale]
+        # EncoderNormalizer softplus: y_real = log(1 + exp(y_norm)) * scale + center
+        # Namun pytorch-forecasting sudah menyimpan denorm di x["target_scale"]
+        try:
+            # x["target_scale"] adalah list of 5 tensors (per target)
+            ts_close = x["target_scale"][3].cpu().numpy()   # (n_samples, 2)
+            center   = ts_close[:, 0]
+            scale    = ts_close[:, 1]
+            # Softplus inverse-norm: pred_real = softplus(pred_norm) * scale + center
+            preds_real = (np.log1p(np.exp(preds_step0)) * scale + center)
+        except Exception:
+            # Jika target_scale tidak tersedia, kembalikan apa adanya
+            preds_real = preds_step0
+
+        # ── Ambil actuals ──
         actuals_list = []
         for batch in val_loader:
             y = batch[1][0] if isinstance(batch[1], (list, tuple)) else batch[1]
             y_close = y[3] if isinstance(y, (list, tuple)) else y
-                
-            # Similarly for actuals
-            act_vals = y_close[:, 0].cpu().numpy()          # only day-1 actual
+            # Ambil hari ke-1 saja
+            act_vals = y_close[:, 0].cpu().numpy() if y_close.ndim >= 2 else y_close.cpu().numpy()
             actuals_list.append(act_vals)
-            
-        actuals_flat = np.concatenate(actuals_list).flatten()
-        min_len = min(len(preds_flat), len(actuals_flat))
-        return preds_flat[:min_len], actuals_flat[:min_len]
+
+        actuals_norm = np.concatenate(actuals_list).flatten()
+
+        # ── Inverse-transform actuals dengan target_scale yang sama ──
+        try:
+            actuals_real = (np.log1p(np.exp(actuals_norm[:len(center)])) * scale + center)
+        except Exception:
+            actuals_real = actuals_norm
+
+        min_len = min(len(preds_real), len(actuals_real))
+        return preds_real[:min_len], actuals_real[:min_len]
 
     def _predict_future(self, df: pd.DataFrame) -> np.ndarray:
         """
