@@ -1,11 +1,3 @@
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║     TFT Stock Prediction - Web Analytics Dashboard                           ║
-║     Temporal Fusion Transformer dengan strategi MIMO                         ║
-║     Top 5 Bank Indonesia                                                     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,16 +7,14 @@ from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings('ignore')
 
-# ── Import modul internal ──────────────────────────────────────────────────
+# Import
 from data_acquisition import fetch_stock_data
 from feature_engineering import build_features
 from model import TFTModel
 from evaluation import evaluate_predictions
 from utils import load_model_cache, save_model_cache
 
-# ══════════════════════════════════════════════════════════════════════════════
-# KONFIGURASI HALAMAN
-# ══════════════════════════════════════════════════════════════════════════════
+# konfigurasi halaman
 st.set_page_config(
     page_title="TFT Bank Indonesia Analytics",
     page_icon="📈",
@@ -32,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Custom CSS untuk tampilan premium ─────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -168,9 +157,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR - PANEL KONTROL
-# ══════════════════════════════════════════════════════════════════════════════
+# Bagian Sidebar
 BANK_OPTIONS = {
     "🏦 BCA (BBCA.JK)":  "BBCA.JK",
     "🏦 BRI (BBRI.JK)":  "BBRI.JK",
@@ -213,10 +200,8 @@ with st.sidebar:
     <b style="color:#475569">Library:</b> pytorch-forecasting
     </div>
     """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
+    
 # HEADER UTAMA
-# ══════════════════════════════════════════════════════════════════════════════
 col_title, col_badge = st.columns([3, 1])
 with col_title:
     st.markdown('<div class="main-header">STOCK PREDICTION ENGINE</div>', unsafe_allow_html=True)
@@ -231,12 +216,10 @@ with col_badge:
     </div>
     """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN LOGIC - dipanggil saat tombol ditekan
-# ══════════════════════════════════════════════════════════════════════════════
+# Konfigurasi proses utama
 if run_button:
 
-    # ── 1. DATA ACQUISITION ────────────────────────────────────────────────
+    # 1.DATA ACQUISITION
     st.markdown('<div class="section-title">01 · Data Acquisition</div>', unsafe_allow_html=True)
     with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
         try:
@@ -246,7 +229,7 @@ if run_button:
             st.error(f"Gagal mengambil data: {e}")
             st.stop()
 
-    # ── 2. FEATURE ENGINEERING ────────────────────────────────────────────
+    # 2.FEATURE ENGINEERING
     st.markdown('<div class="section-title">02 · Feature Engineering</div>', unsafe_allow_html=True)
     with st.spinner("Membangun fitur teknis dan temporal..."):
         try:
@@ -257,7 +240,7 @@ if run_button:
             st.error(f"Feature engineering gagal: {e}")
             st.stop()
 
-    # ── 3. MODEL TRAINING ─────────────────────────────────────────────────
+    # 3.MODEL TRAINING
     st.markdown('<div class="section-title">03 · Model Training (TFT · MIMO)</div>', unsafe_allow_html=True)
 
     cache_key = f"{ticker}_{forecast_days}_{max_epochs}_{learning_rate}_v3"
@@ -303,17 +286,14 @@ if run_button:
             import traceback; st.code(traceback.format_exc())
             st.stop()
             
-     # ── 4. EVALUATION METRICS ─────────────────────────────────────────────
+     # 4.EVALUATION METRICS
     st.markdown('<div class="section-title">04 · Evaluation Metrics</div>', unsafe_allow_html=True)
     
-    # Pastikan formatnya Numpy Array 1 Dimensi yang bersih
     act_close = np.array(actuals).flatten()
     pred_close = np.array(predictions).flatten()
 
-    # Dapatkan metrics dasar
     metrics = evaluate_predictions(act_close, pred_close)
 
-    # TAMPILKAN HANYA 3 KOTAK (TANPA R2)
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("MAE", f"{metrics.get('MAE', 0):.2f}")
@@ -322,14 +302,12 @@ if run_button:
     with col3:
         st.metric("MAPE", f"{metrics.get('MAPE', 0):.2f}%")
 
-    # ── 5. CHART AKTUAL vs PREDIKSI ───────────────────────────────────────
+    # 5.CHART AKTUAL vs PREDIKSI
     st.markdown('<div class="section-title">05 · Aktual vs Prediksi (Backtest)</div>', unsafe_allow_html=True)
 
-    # Tentukan titik jangkar "Today" yang benar-benar akurat dari data asli
     last_date = featured_df.index[-1]
     last_close = featured_df['close'].iloc[-1]
 
-    # Sinkronisasi tanggal backtest agar posisinya pas dengan garis historis
     shift = forecast_days - 1
     if shift > 0:
         dates_hist = featured_df.index[-len(actuals)-shift : -shift]
@@ -338,7 +316,7 @@ if run_button:
 
     future_dates = pd.date_range(
         start=last_date + pd.Timedelta(days=1),
-        periods=len(future_pred['close']), freq='B'  # <--- Tambahkan ['close']
+        periods=len(future_pred['close']), freq='B'
     )
 
     fig_main = go.Figure()
@@ -360,13 +338,12 @@ if run_button:
     # Prediksi masa depan
     fig_main.add_trace(go.Scatter(
         x=[last_date] + list(future_dates),
-        y=[last_close] + list(future_pred['close']), # <--- Tambahkan ['close']
+        y=[last_close] + list(future_pred['close']),
         mode='lines', name=f'Forecast {forecast_days}H',
         line=dict(color='#00ff88', width=2.5)
     ))
     # Area bayangan uncertainty (±5%)
     # Area bayangan uncertainty (DIAMBIL LANGSUNG DARI QUANTILE LOSS)
-    # Wajib dibungkus list() agar tidak memicu matematika Numpy!
     upper = list(future_pred['close_upper'])
     lower = list(future_pred['close_lower'])
     fig_main.add_trace(go.Scatter(
@@ -400,7 +377,7 @@ if run_button:
     )
     st.plotly_chart(fig_main, use_container_width=True)
 
-    # ── 6. TABEL PREDIKSI MASA DEPAN ──────────────────────────────────────
+    # 6.TABEL PREDIKSI MASA DEPAN
     with st.expander("📋 Detail Tabel Forecast", expanded=False):
         forecast_df = pd.DataFrame({
             'Tanggal':   future_dates.strftime('%Y-%m-%d'),
@@ -416,14 +393,13 @@ if run_button:
             }
         )
 
-    # ── 7. ATTENTION WEIGHTS VISUALISASI ─────────────────────────────────
+    # 7.ATTENTION WEIGHTS VISUALISASI
     st.markdown('<div class="section-title">06 · Interpretabilitas — Attention Weights</div>', unsafe_allow_html=True)
     st.markdown('<div class="info-box">Visualisasi di bawah menunjukkan fitur mana yang paling berpengaruh pada prediksi model TFT. Semakin tinggi bar, semakin besar kontribusi fitur tersebut.</div>', unsafe_allow_html=True)
 
     col_att1, col_att2 = st.columns([1, 1])
 
     with col_att1:
-        # Bar chart variable importance
         feat_names = list(attn_weights["variable_importance"].keys())
         feat_vals  = list(attn_weights["variable_importance"].values())
         sorted_idx = np.argsort(feat_vals)[::-1]
@@ -451,7 +427,6 @@ if run_button:
         st.plotly_chart(fig_att, use_container_width=True)
 
     with col_att2:
-        # Heatmap temporal attention
         if "temporal_attention" in attn_weights and attn_weights["temporal_attention"] is not None:
             temp_attn = np.array(attn_weights["temporal_attention"])
             fig_heat = go.Figure(go.Heatmap(
@@ -473,7 +448,7 @@ if run_button:
         else:
             st.markdown('<div class="warn-box">⚠️ Temporal attention tidak tersedia — model menggunakan mode simulasi.</div>', unsafe_allow_html=True)
 
-    # ── 8. ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN ───────────────────
+    # 8.ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN
     st.markdown('<div class="section-title">07 · Analisis Teknikal</div>', unsafe_allow_html=True)
     
     # Hitung Proyeksi RSI dan Volatilitas Masa Depan
@@ -520,19 +495,16 @@ if run_button:
                 mode='lines', name=label,
                 line=dict(color=color, width=1.5)
             ), row=1, col=1)
-
-    # --- 🛠️ INJEKSI VOLATILITAS UNTUK VISUALISASI CANDLESTICK REALISTIS ---
+            
     recent_vol = featured_df['close'].pct_change().tail(30).std()
     
     sim_open, sim_high, sim_low = [], [], []
     prev_c = last_close
     
     for c in future_pred['close']:
-        # 1. Simulasikan lompatan harga buka (Market Gap)
         gap_noise = prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
         o = prev_c + gap_noise
         
-        # 2. Simulasikan sumbu (Wicks) panjang/pendek
         wick_h = c * np.random.uniform(0.001, recent_vol * 1.5)
         wick_l = c * np.random.uniform(0.001, recent_vol * 1.5)
         
@@ -550,7 +522,7 @@ if run_button:
         open=sim_open,
         high=sim_high,
         low=sim_low,
-        close=future_pred['close'], # <--- Tren absolut tetap setia pada prediksi AI
+        close=future_pred['close'],
         name='Forecast OHLC', 
         increasing_line_color='rgba(0, 255, 136, 0.85)', 
         decreasing_line_color='rgba(239, 68, 68, 0.85)'  
@@ -605,7 +577,6 @@ if run_button:
         name='Forecast Volatilitas', marker_color='#00ff88', opacity=0.4
     ), row=3, col=1)
 
-    # Penanda "Today" (Garis Vertikal)
     fig_tech.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="#f59e0b", line_width=1.5, row='all', col=1)
 
     fig_tech.update_layout(
@@ -631,7 +602,7 @@ if run_button:
     </div>
     """, unsafe_allow_html=True)
 
-# ── Tampilan awal sebelum klik ─────────────────────────────────────────────
+# Tampilan awal
 else:
     st.markdown("""
     <div style="display:flex; align-items:center; justify-content:center; min-height:400px; flex-direction:column; gap:1.5rem; padding:3rem;">
