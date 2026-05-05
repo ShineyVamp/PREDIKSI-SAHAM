@@ -285,40 +285,35 @@ class RealTFTModel:
     def _predict_backtest(self, val_loader):
         """
         Prediksi backtest dalam skala harga asli (IDR).
-        Mengambil label aktual langsung dari dictionary X agar kebal dari error normalizer.
+        Biarkan PyTorch yang melakukan denormalisasi otomatis menggunakan return_y=True.
         """
-        # 1. Ambil Prediksi
-        preds = self.model.predict(
-            val_loader, mode="prediction", return_x=False,
+        # 1. Ambil Prediksi & Aktual sekaligus (DIJAMIN ALIGNED & DENORMALIZED!)
+        output = self.model.predict(
+            val_loader, mode="prediction", return_y=True,
             trainer_kwargs={"logger": False}
         )
-        preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
-        preds_np    = preds_close.cpu().numpy() if hasattr(preds_close, "cpu") else np.array(preds_close)
-
-        if preds_np.ndim == 3:
-            preds_day1 = preds_np[:, 0, 2]   # Kuantil Median
-        elif preds_np.ndim == 2:
-            preds_day1 = preds_np[:, 0]
-        else:
-            preds_day1 = preds_np.flatten()
-
-        # 2. Ambil Actuals (Tanpa denormalisasi manual, langsung ambil harga asli!)
-        actuals_list = []
-        for batch in val_loader:
-            x_batch = batch[0]
-            # decoder_target adalah fitur PyTorch yang menyimpan data murni sebelum di-scale
-            dec_target = x_batch.get("decoder_target", None)
-            
-            if dec_target is not None:
-                y_unscaled = dec_target[3] if isinstance(dec_target, (list, tuple)) else dec_target
-                actuals_list.append(y_unscaled[:, 0].cpu().numpy())
-            else:
-                actuals_list.append(np.zeros(len(x_batch["time_idx"])))
-
-        actuals_day1 = np.concatenate(actuals_list).flatten()
-        min_len = min(len(preds_day1), len(actuals_day1))
         
-        return preds_day1[:min_len], actuals_day1[:min_len]
+        # 2. Unpack hasil (Bypass versi pytorch-forecasting apapun)
+        preds = output.output if hasattr(output, "output") else output[0]
+        y_raw = output.y if hasattr(output, "y") else output[1]
+        
+        # y_raw umumnya berupa tuple: (target_tensor, weight_tensor)
+        targets = y_raw[0] if isinstance(y_raw, (list, tuple)) and len(y_raw) == 2 else y_raw
+
+        # 3. Ekstrak data Close (index ke-3 dari target MIMO)
+        preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
+        acts_close  = targets[3] if isinstance(targets, (list, tuple)) else targets
+
+        p_np = preds_close.cpu().numpy() if hasattr(preds_close, "cpu") else np.array(preds_close)
+        a_np = acts_close.cpu().numpy()  if hasattr(acts_close, "cpu") else np.array(acts_close)
+
+        # 4. Ambil prediksi hari pertama (T+1) dari setiap sequence window
+        p_day1 = p_np[:, 0, 2] if p_np.ndim == 3 else (p_np[:, 0] if p_np.ndim == 2 else p_np.flatten())
+        a_day1 = a_np[:, 0] if a_np.ndim == 2 else a_np.flatten()
+
+        # Samakan panjang untuk jaga-jaga
+        min_len = min(len(p_day1), len(a_day1))
+        return p_day1[:min_len], a_day1[:min_len]
 
     def _predict_future(self, df: pd.DataFrame) -> np.ndarray:
         """
