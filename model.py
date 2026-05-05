@@ -284,55 +284,60 @@ class RealTFTModel:
 
     def _predict_backtest(self, val_loader):
         """
-        Prediksi backtest dalam skala harga asli (IDR).
-        Biarkan PyTorch yang melakukan denormalisasi otomatis.
+        Prediksi backtest dengan Penyelarasan Waktu Absolut (Absolute Time Mapping).
+        Mencegah garis visual terputus atau geser (lagging) di Streamlit.
         """
-        # 1. Ambil Prediksi & Aktual sekaligus
+        # 1. Ambil Prediksi, Target, dan Informasi Waktu (X) sekaligus
         output = self.model.predict(
-            val_loader, mode="prediction", return_y=True,
+            val_loader, mode="prediction", return_x=True, return_y=True,
             trainer_kwargs={"logger": False}
         )
         
         preds = output.output if hasattr(output, "output") else output[0]
-        y_raw = output.y if hasattr(output, "y") else output[1]
-        targets = y_raw[0] if isinstance(y_raw, (list, tuple)) and len(y_raw) == 2 else y_raw
+        x_dict = output.x if hasattr(output, "x") else output[1]
+        y_raw = output.y if hasattr(output, "y") else output[2]
 
-        # 2. Ekstrak data Close (index ke-3 dari target MIMO)
+        # 2. Ekstrak Target Close (Target MIMO ke-4 -> Index 3)
         preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
-        acts_close  = targets[3] if isinstance(targets, (list, tuple)) else targets
-
         p_np = preds_close.cpu().numpy() if hasattr(preds_close, "cpu") else np.array(preds_close)
-        a_np = acts_close.cpu().numpy()  if hasattr(acts_close, "cpu") else np.array(acts_close)
+        if p_np.ndim == 3: p_np = p_np[:, :, 2]
+        elif p_np.ndim == 1: p_np = p_np.reshape(1, -1)
 
-        # Standarisasi dimensi ke 2D (Jumlah Window, 30 Hari)
-        if p_np.ndim == 3:
-            p_np = p_np[:, :, 2]  # Ambil Kuantil Tengah (Median)
-        elif p_np.ndim == 1:
-            p_np = p_np.reshape(1, -1)
+        targets = y_raw[0] if isinstance(y_raw, (list, tuple)) and len(y_raw) == 2 else y_raw
+        acts_close = targets[3] if isinstance(targets, (list, tuple)) else targets
+        a_np = acts_close.cpu().numpy() if hasattr(acts_close, "cpu") else np.array(acts_close)
+        if a_np.ndim == 3: a_np = a_np[:, :, 0]
+        elif a_np.ndim == 1: a_np = a_np.reshape(1, -1)
+
+        # 3. 🚀 PENYELARASAN KANVAS ABSOLUT 🚀
+        time_idx_tensor = x_dict.get('decoder_time_idx', None)
+        
+        if time_idx_tensor is not None:
+            time_idx = time_idx_tensor.cpu().numpy()
             
-        if a_np.ndim == 3:
-            a_np = a_np[:, :, 0]
-        elif a_np.ndim == 1:
-            a_np = a_np.reshape(1, -1)
-
-        # 3. Ambil prediksi hari pertama (T+1) dari setiap sequence window
-        p_day1 = p_np[:, 0]
-        a_day1 = a_np[:, 0]
-
-        # 🚀 4. BUGFIX GAP: Ambil sisa 29 hari dari window TERAKHIR untuk menutup gap ke "Today"
-        if len(p_np) > 0 and p_np.shape[1] > 1:
-            p_gap = p_np[-1, 1:]  # Ambil tebakan hari ke-2 sampai 30 dari window terakhir
-            a_gap = a_np[-1, 1:]  # Ambil data asli hari ke-2 sampai 30 dari window terakhir
+            # Buat kanvas kosong raksasa sebesar timeline asli bursa
+            max_idx = np.max(time_idx) + 1
+            p_canvas = np.full(max_idx, np.nan)
+            a_canvas = np.full(max_idx, np.nan)
             
-            # Tempelkan ke ujung array
-            p_final = np.concatenate([p_day1, p_gap])
-            a_final = np.concatenate([a_day1, a_gap])
+            # Tembakkan tebakan AI persis ke koordinat tanggal aslinya!
+            # Kita utamakan tebakan H+1 (akurasi tertinggi) di bagian atas timpaan
+            for i in range(p_np.shape[1] - 1, -1, -1):
+                idx_col = time_idx[:, i]
+                p_canvas[idx_col] = p_np[:, i]
+                a_canvas[idx_col] = a_np[:, i]
+                
+            # Rapikan jika ada tanggal merah/libur (Forward & Backward Fill)
+            p_series = pd.Series(p_canvas).ffill().bfill().values
+            a_series = pd.Series(a_canvas).ffill().bfill().values
+            
+            # Potong persis 20% terakhir untuk dikirim ke Streamlit
+            val_cutoff = int(max_idx * 0.8)
+            return p_series[val_cutoff:], a_series[val_cutoff:]
+            
         else:
-            p_final, a_final = p_day1, a_day1
-
-        # Samakan panjang untuk jaga-jaga
-        min_len = min(len(p_final), len(a_final))
-        return p_final[:min_len], a_final[:min_len]
+            # Fallback darurat jika ada kendala library
+            return p_np[:, 0], a_np[:, 0]
 
     def _predict_future(self, df: pd.DataFrame) -> np.ndarray:
         """
