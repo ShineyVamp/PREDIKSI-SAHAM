@@ -285,35 +285,54 @@ class RealTFTModel:
     def _predict_backtest(self, val_loader):
         """
         Prediksi backtest dalam skala harga asli (IDR).
-        Biarkan PyTorch yang melakukan denormalisasi otomatis menggunakan return_y=True.
+        Biarkan PyTorch yang melakukan denormalisasi otomatis.
         """
-        # 1. Ambil Prediksi & Aktual sekaligus (DIJAMIN ALIGNED & DENORMALIZED!)
+        # 1. Ambil Prediksi & Aktual sekaligus
         output = self.model.predict(
             val_loader, mode="prediction", return_y=True,
             trainer_kwargs={"logger": False}
         )
         
-        # 2. Unpack hasil (Bypass versi pytorch-forecasting apapun)
         preds = output.output if hasattr(output, "output") else output[0]
         y_raw = output.y if hasattr(output, "y") else output[1]
-        
-        # y_raw umumnya berupa tuple: (target_tensor, weight_tensor)
         targets = y_raw[0] if isinstance(y_raw, (list, tuple)) and len(y_raw) == 2 else y_raw
 
-        # 3. Ekstrak data Close (index ke-3 dari target MIMO)
+        # 2. Ekstrak data Close (index ke-3 dari target MIMO)
         preds_close = preds[3] if isinstance(preds, (list, tuple)) else preds
         acts_close  = targets[3] if isinstance(targets, (list, tuple)) else targets
 
         p_np = preds_close.cpu().numpy() if hasattr(preds_close, "cpu") else np.array(preds_close)
         a_np = acts_close.cpu().numpy()  if hasattr(acts_close, "cpu") else np.array(acts_close)
 
-        # 4. Ambil prediksi hari pertama (T+1) dari setiap sequence window
-        p_day1 = p_np[:, 0, 2] if p_np.ndim == 3 else (p_np[:, 0] if p_np.ndim == 2 else p_np.flatten())
-        a_day1 = a_np[:, 0] if a_np.ndim == 2 else a_np.flatten()
+        # Standarisasi dimensi ke 2D (Jumlah Window, 30 Hari)
+        if p_np.ndim == 3:
+            p_np = p_np[:, :, 2]  # Ambil Kuantil Tengah (Median)
+        elif p_np.ndim == 1:
+            p_np = p_np.reshape(1, -1)
+            
+        if a_np.ndim == 3:
+            a_np = a_np[:, :, 0]
+        elif a_np.ndim == 1:
+            a_np = a_np.reshape(1, -1)
+
+        # 3. Ambil prediksi hari pertama (T+1) dari setiap sequence window
+        p_day1 = p_np[:, 0]
+        a_day1 = a_np[:, 0]
+
+        # 🚀 4. BUGFIX GAP: Ambil sisa 29 hari dari window TERAKHIR untuk menutup gap ke "Today"
+        if len(p_np) > 0 and p_np.shape[1] > 1:
+            p_gap = p_np[-1, 1:]  # Ambil tebakan hari ke-2 sampai 30 dari window terakhir
+            a_gap = a_np[-1, 1:]  # Ambil data asli hari ke-2 sampai 30 dari window terakhir
+            
+            # Tempelkan ke ujung array
+            p_final = np.concatenate([p_day1, p_gap])
+            a_final = np.concatenate([a_day1, a_gap])
+        else:
+            p_final, a_final = p_day1, a_day1
 
         # Samakan panjang untuk jaga-jaga
-        min_len = min(len(p_day1), len(a_day1))
-        return p_day1[:min_len], a_day1[:min_len]
+        min_len = min(len(p_final), len(a_final))
+        return p_final[:min_len], a_final[:min_len]
 
     def _predict_future(self, df: pd.DataFrame) -> np.ndarray:
         """
