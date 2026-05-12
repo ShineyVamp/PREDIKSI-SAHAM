@@ -245,7 +245,7 @@ if run_button:
     st.markdown('<div class="section-title">03 · Feature Engineering</div>', unsafe_allow_html=True)
     with st.spinner("Membangun fitur teknis dan temporal..."):
         try:
-            featured_df = build_features(raw_df, ticker)
+            featured_df = build_features(cleaned_df, ticker)
             n_features = len(featured_df.columns)
             st.markdown(f'<div class="info-box">Feature engineering selesai: <b>{n_features}</b> fitur dibuat (teknis + temporal + static covariates)</div>', unsafe_allow_html=True)
         except Exception as e:
