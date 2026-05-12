@@ -24,95 +24,84 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Import Font yang lebih elegan */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    :root {
-        --primary: #4f46e5;
-        --text-main: #1e293b;
-        --text-light: #64748b;
-        --bg-light: #f8fafc;
-        --border-color: #e2e8f0;
-    }
-
-    /* Base Layout */
+    /* Root styling menggunakan variabel bawaan Streamlit */
     .stApp {
-        background-color: white !important;
         font-family: 'Inter', sans-serif;
     }
 
-    /* Header Styling */
+    /* Header & Text */
     .main-header {
         font-weight: 700;
-        font-size: 1.75rem;
-        color: var(--text-main);
-        letter-spacing: -0.02em;
-        margin-bottom: 0.5rem;
+        font-size: 1.8rem;
+        color: var(--text-color);
+        letter-spacing: -0.03em;
+        margin-bottom: 0.2rem;
     }
     .sub-header {
         font-weight: 400;
-        font-size: 1rem;
-        color: var(--text-light);
-        margin-bottom: 2.5rem;
+        font-size: 0.95rem;
+        color: var(--text-color);
+        opacity: 0.7;
+        margin-bottom: 2rem;
     }
 
-    /* Card Styling */
+    /* Card Adaptif */
     div[data-testid="stMetric"] {
-        background: white !important;
-        border: 1px solid var(--border-color) !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        background-color: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.1) !important;
         border-radius: 12px !important;
-        padding: 1.5rem !important;
+        padding: 1rem !important;
     }
 
-    /* Section Title */
+    /* Section Title Minimalis */
     .section-title {
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         font-weight: 600;
-        color: var(--primary);
+        color: #3b82f6; /* Aksen biru tetap konsisten */
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin: 2rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+    }
+    .section-title::after {
+        content: "";
+        flex: 1;
+        margin-left: 10px;
+        height: 1px;
+        background-color: rgba(128, 128, 128, 0.2);
     }
 
-    /* Clean Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: var(--bg-light) !important;
-        border-right: 1px solid var(--border-color);
-    }
-
-    /* Button Styling */
+    /* Tombol Modern */
     .stButton button {
-        background-color: var(--primary) !important;
+        background-color: #3b82f6 !important;
         color: white !important;
-        border-radius: 8px !important;
         border: none !important;
+        border-radius: 8px !important;
         padding: 0.5rem 1rem !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
+        width: 100%;
     }
     .stButton button:hover {
         opacity: 0.9;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        transform: translateY(-1px);
     }
 
-    /* Info & Warning Boxes */
+    /* Box Informasi Adaptif */
     .info-box {
-        background: #f1f5f9;
-        border-radius: 8px;
+        background-color: var(--secondary-background-color);
+        border-left: 4px solid #3b82f6;
         padding: 1rem;
-        font-size: 0.9rem;
-        color: var(--text-main);
-        border: 1px solid var(--border-color);
-        margin: 1rem 0;
+        border-radius: 0 8px 8px 0;
+        font-size: 0.85rem;
+        color: var(--text-color);
     }
-    
-    /* Plotly Chart refinement */
-    .js-plotly-plot {
-        border-radius: 12px;
-        overflow: hidden;
+
+    /* Sidebar minimalis */
+    section[data-testid="stSidebar"] {
+        background-color: var(--secondary-background-color) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -140,7 +129,7 @@ with st.sidebar:
     st.markdown('<div class="section-title">Horizon Prediksi</div>', unsafe_allow_html=True)
     forecast_days = st.slider("Hari ke depan", min_value=7, max_value=30, value=30, step=7)
 
-    st.markdown('<div class="section-title">Konfigurasi Model</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Konurasi Model</div>', unsafe_allow_html=True)
     max_epochs = st.slider("Max Epochs", 1, 100, 50, 10)
     learning_rate = st.select_slider(
         "Learning Rate",
@@ -166,7 +155,7 @@ with col_title:
     st.markdown('<div class="main-header">STOCK PREDICTION ENGINE</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="sub-header">{ticker} · {forecast_days}-Day Horizon</div>', unsafe_allow_html=True)
 
-# Konfigurasi proses utama
+# Konurasi proses utama
 if run_button:
 
     # 1.DATA ACQUISITION
