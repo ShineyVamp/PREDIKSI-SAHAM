@@ -322,11 +322,7 @@ if run_button:
     last_date = featured_df.index[-1]
     last_close = featured_df['close'].iloc[-1]
 
-    shift = forecast_days - 1
-    if shift > 0:
-        dates_hist = featured_df.index[-len(actuals)-shift : -shift]
-    else:
-        dates_hist = featured_df.index[-len(actuals):]
+    dates_hist = featured_df.index[-len(actuals):]    
 
     future_dates = pd.date_range(
         start=last_date + pd.Timedelta(days=1),
