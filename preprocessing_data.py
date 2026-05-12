@@ -1,42 +1,48 @@
-"""
-data_acquisition.py
-═══════════════════
-Modul khusus untuk mengakuisisi data mentah dari Yahoo Finance.
-TIDAK ADA proses pembersihan (preprocessing) di sini.
-"""
-
-import yfinance as yf
-import pandas as pd
-from datetime import datetime, timedelta
-import logging
 
 logger = logging.getLogger(__name__)
 
-BANK_TICKERS = {
-    "BBCA.JK": "Bank Central Asia",
-    "BBRI.JK": "Bank Rakyat Indonesia",
-    "BMRI.JK": "Bank Mandiri",
-    "BBNI.JK": "Bank Negara Indonesia",
-    "BRIS.JK": "Bank Syariah Indonesia",
-}
+REQUIRED_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
-def fetch_raw_stock_data(ticker: str, period_years: int = 5) -> pd.DataFrame:
-    """Mengambil data OHLCV historis mentah dari Yahoo Finance."""
-    end_date   = datetime.today()
-    # Buffer hari ditambahkan agar saat preprocessing, MA50/indikator lain tidak kekurangan data
-    start_date = end_date - timedelta(days=period_years * 365 + 100) 
+def preprocess_stock_data(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Menerima dataframe mentah dan mengembalikan dataframe bersih."""
+    df = raw_df.copy()
 
-    logger.info(f"Fetching RAW data {ticker} dari {start_date.date()} ke {end_date.date()}")
+    # 1. Flatten MultiIndex columns jika format yfinance versi baru
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [col[0] for col in df.columns]
 
-    raw = yf.download(
-        ticker,
-        start=start_date.strftime('%Y-%m-%d'),
-        end=end_date.strftime('%Y-%m-%d'),
-        progress=False,
-        auto_adjust=True, # Normalisasi dasar terhadap aksi korporasi
-    )
+    # 2. Seleksi kolom penting dan ubah ke lowercase
+    available = [c for c in REQUIRED_COLUMNS if c in df.columns]
+    if len(available) < 4:
+        raise ValueError(f"Kolom tidak lengkap. Tersedia: {list(df.columns)}")
+    
+    df = df[available]
+    df.columns = df.columns.str.lower()
 
-    if raw.empty:
-        raise ValueError(f"Tidak ada data untuk ticker '{ticker}'. Pastikan simbol benar.")
+    # 3. Tangani Missing Values (Gap interpolasi, ffill, bfill)
+    df = _handle_missing_values(df)
 
-    return raw
+    # 4. Hapus baris dengan harga anomali (0 atau negatif)
+    for col in ['open', 'high', 'low', 'close']:
+        if col in df.columns:
+            df = df[df[col] > 0]
+
+    # 5. Pastikan indeks adalah DatetimeIndex yang rapi dan unik
+    df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+    df = df[~df.index.duplicated(keep='last')]
+
+    return df
+
+def _handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Strategi interpolasi untuk gap kecil, dan fill untuk gap besar."""
+    for col in df.columns:
+        mask = df[col].isnull()
+        if mask.any():
+            groups = mask.ne(mask.shift()).cumsum()
+            gap_sizes = df[col].isnull().groupby(groups).transform('sum')
+            small_gaps = mask & (gap_sizes <= 5)
+            df.loc[small_gaps, col] = df[col].interpolate(method='linear')[small_gaps]
+
+    # Forward fill lalu backward fill untuk sisa NaN, terakhir drop jika masih ada
+    return df.ffill().bfill().dropna()
