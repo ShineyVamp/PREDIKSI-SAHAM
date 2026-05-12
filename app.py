@@ -306,13 +306,15 @@ if run_button:
 
     metrics = evaluate_predictions(act_close, pred_close)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("MAE", f"{metrics.get('MAE', 0):.2f}")
     with col2:
         st.metric("RMSE", f"{metrics.get('RMSE', 0):.2f}")
     with col3:
         st.metric("MAPE", f"{metrics.get('MAPE', 0):.2f}%")
+    with col4:
+        st.metric("directional accuracy", f"{metrics.get('directional_accuracy', 0):.2f}%")
 
     # 5.CHART AKTUAL vs PREDIKSI
     st.markdown('<div class="section-title">05 · Aktual vs Prediksi (Backtest)</div>', unsafe_allow_html=True)
