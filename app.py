@@ -18,7 +18,6 @@ from utils import load_model_cache, save_model_cache
 # konfigurasi halaman
 st.set_page_config(
     page_title="TFT Bank Indonesia Analytics",
-    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -160,16 +159,16 @@ st.markdown("""
 
 # Bagian Sidebar
 BANK_OPTIONS = {
-    "🏦 BCA (BBCA.JK)":  "BBCA.JK",
-    "🏦 BRI (BBRI.JK)":  "BBRI.JK",
-    "🏦 Mandiri (BMRI.JK)": "BMRI.JK",
-    "🏦 BNI (BBNI.JK)":  "BBNI.JK",
-    "🏦 BSI (BRIS.JK)":  "BRIS.JK",
+    "BCA (BBCA.JK)":  "BBCA.JK",
+    "BRI (BBRI.JK)":  "BBRI.JK",
+    "Mandiri (BMRI.JK)": "BMRI.JK",
+    "BNI (BBNI.JK)":  "BBNI.JK",
+    "BSI (BRIS.JK)":  "BRIS.JK",
 }
 
 with st.sidebar:
-    st.markdown('<div class="main-header" style="font-size:1.3rem">⚡ TFT Analytics</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Temporal Fusion Transformer<br>Bank Indonesia Prediction Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header" style="font-size:1.3rem">Prediksi Saham dengan TFT</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Temporal Fusion Transformer for<br>Top 5 Indonesian Bank Prediction Engine</div>', unsafe_allow_html=True)
     st.divider()
 
     st.markdown('<div class="section-title">Pilih Saham</div>', unsafe_allow_html=True)
@@ -191,14 +190,13 @@ with st.sidebar:
     use_cache = st.checkbox("Gunakan model tersimpan (jika ada)", value=True)
 
     st.divider()
-    run_button = st.button("🚀 Jalankan Analisis", use_container_width=True)
+    run_button = st.button("Jalankan Analisis", use_container_width=True)
     
     st.markdown("""
     <div style="margin-top:2rem; font-family:'DM Sans',sans-serif; font-size:0.72rem; color:#334155; line-height:1.6;">
     <b style="color:#475569">Model:</b> Temporal Fusion Transformer<br>
     <b style="color:#475569">Strategi:</b> MIMO (Multi-Input Multi-Output)<br>
-    <b style="color:#475569">Data:</b> 5 Tahun historis via yfinance<br>
-    <b style="color:#475569">Library:</b> pytorch-forecasting
+    <b style="color:#475569">Data:</b> 10 Tahun historis via yfinance<br>
     </div>
     """, unsafe_allow_html=True)
     
@@ -206,7 +204,7 @@ with st.sidebar:
 col_title, col_badge = st.columns([3, 1])
 with col_title:
     st.markdown('<div class="main-header">STOCK PREDICTION ENGINE</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="sub-header">Temporal Fusion Transformer · MIMO Strategy · {ticker} · {forecast_days}-Day Horizon</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sub-header">{ticker} · {forecast_days}-Day Horizon</div>', unsafe_allow_html=True)
 
 with col_badge:
     st.markdown("""
@@ -222,7 +220,7 @@ if run_button:
 
     # 1.DATA ACQUISITION
     st.markdown('<div class="section-title">01 · Data Acquisition</div>', unsafe_allow_html=True)
-    with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
+    with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance"):
         try:
             raw_df = fetch_raw_stock_data(ticker, period_years=10)
             st.markdown(f'<div class="info-box">Berhasil mengambil <b>{len(raw_df):,}</b> baris data historis untuk <b>{ticker}</b> ({raw_df.index.min().date()} → {raw_df.index.max().date()})</div>', unsafe_allow_html=True)
@@ -239,7 +237,6 @@ if run_button:
         except Exception as e:
             st.error(f"Gagal preprocsseing data: {e}")
             st.stop()
-
     
     # 2.FEATURE ENGINEERING
     st.markdown('<div class="section-title">03 · Feature Engineering</div>', unsafe_allow_html=True)
@@ -388,7 +385,7 @@ if run_button:
     st.plotly_chart(fig_main, use_container_width=True)
 
     # 6.TABEL PREDIKSI MASA DEPAN
-    with st.expander("📋 Detail Tabel Forecast", expanded=False):
+    with st.expander("Detail Tabel Forecast", expanded=False):
         forecast_df = pd.DataFrame({
             'Tanggal':   future_dates.strftime('%Y-%m-%d'),
             'Prediksi (IDR)': [f"Rp {p:,.0f}" for p in future_pred['close']],
@@ -403,60 +400,66 @@ if run_button:
             }
         )
 
-    # 7.ATTENTION WEIGHTS VISUALISASI
-    st.markdown('<div class="section-title">06 · Interpretabilitas — Attention Weights</div>', unsafe_allow_html=True)
-    st.markdown('<div class="info-box">Visualisasi di bawah menunjukkan fitur mana yang paling berpengaruh pada prediksi model TFT. Semakin tinggi bar, semakin besar kontribusi fitur tersebut.</div>', unsafe_allow_html=True)
-
-    col_att1, col_att2 = st.columns([1, 1])
-
-    with col_att1:
-        feat_names = list(attn_weights["variable_importance"].keys())
-        feat_vals  = list(attn_weights["variable_importance"].values())
-        sorted_idx = np.argsort(feat_vals)[::-1]
-
-        fig_att = go.Figure(go.Bar(
-            x=[feat_vals[i] for i in sorted_idx],
-            y=[feat_names[i] for i in sorted_idx],
-            orientation='h',
-            marker=dict(
-                color=[feat_vals[i] for i in sorted_idx],
-                colorscale=[[0,'#1e3a5f'],[0.5,'#3b82f6'],[1,'#00ff88']],
-                showscale=False
-            )
-        ))
-        fig_att.update_layout(
-            title=dict(text="Variable Importance Score", font=dict(size=13, color='#94a3b8'), x=0),
-            template='plotly_dark',
-            paper_bgcolor='#111827', plot_bgcolor='#111827',
-            height=380,
-            margin=dict(l=10, r=20, t=40, b=10),
-            xaxis=dict(gridcolor='#1e293b', title='Importance Score'),
-            yaxis=dict(gridcolor='#1e293b'),
-            font=dict(family='DM Sans', color='#94a3b8', size=11)
+    # 7. ATTENTION WEIGHTS VISUALISASI
+    st.markdown(
+        '<div class="section-title">06 · Interpretabilitas — Feature Importance</div>',
+        unsafe_allow_html=True
+    )
+    
+    st.markdown(
+        '<div class="info-box">'
+        'Visualisasi di bawah menunjukkan fitur mana yang paling berpengaruh '
+        'pada prediksi model TFT. Semakin tinggi bar, semakin besar kontribusi fitur tersebut.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+    
+    feat_names = list(attn_weights["variable_importance"].keys())
+    feat_vals  = list(attn_weights["variable_importance"].values())
+    
+    sorted_idx = np.argsort(feat_vals)[::-1]
+    
+    fig_att = go.Figure(go.Bar(
+        x=[feat_vals[i] for i in sorted_idx],
+        y=[feat_names[i] for i in sorted_idx],
+        orientation='h',
+        marker=dict(
+            color=[feat_vals[i] for i in sorted_idx],
+            colorscale=[
+                [0,   '#1e3a5f'],
+                [0.5, '#3b82f6'],
+                [1,   '#00ff88']
+            ],
+            showscale=False
         )
-        st.plotly_chart(fig_att, use_container_width=True)
-
-    with col_att2:
-        if "temporal_attention" in attn_weights and attn_weights["temporal_attention"] is not None:
-            temp_attn = np.array(attn_weights["temporal_attention"])
-            fig_heat = go.Figure(go.Heatmap(
-                z=temp_attn,
-                colorscale=[[0,'#0a0e1a'],[0.5,'#3b82f6'],[1,'#00ff88']],
-                showscale=True
-            ))
-            fig_heat.update_layout(
-                title=dict(text="Temporal Attention Pattern", font=dict(size=13, color='#94a3b8'), x=0),
-                template='plotly_dark',
-                paper_bgcolor='#111827', plot_bgcolor='#111827',
-                height=380,
-                margin=dict(l=10, r=10, t=40, b=10),
-                xaxis=dict(title='Forecast Step', gridcolor='#1e293b'),
-                yaxis=dict(title='Lookback Step',  gridcolor='#1e293b'),
-                font=dict(family='DM Sans', color='#94a3b8', size=11)
-            )
-            st.plotly_chart(fig_heat, use_container_width=True)
-        else:
-            st.markdown('<div class="warn-box">⚠️ Temporal attention tidak tersedia — model menggunakan mode simulasi.</div>', unsafe_allow_html=True)
+    ))
+    
+    fig_att.update_layout(
+        title=dict(
+            text="Variable Importance Score",
+            font=dict(size=13, color='#94a3b8'),
+            x=0
+        ),
+        template='plotly_dark',
+        paper_bgcolor='#111827',
+        plot_bgcolor='#111827',
+        height=420,
+        margin=dict(l=10, r=20, t=40, b=10),
+        xaxis=dict(
+            gridcolor='#1e293b',
+            title='Importance Score'
+        ),
+        yaxis=dict(
+            gridcolor='#1e293b'
+        ),
+        font=dict(
+            family='DM Sans',
+            color='#94a3b8',
+            size=11
+        )
+    )
+    
+    st.plotly_chart(fig_att, use_container_width=True)
 
     # 8.ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN
     st.markdown('<div class="section-title">07 · Analisis Teknikal</div>', unsafe_allow_html=True)
