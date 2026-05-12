@@ -109,9 +109,9 @@ def fetch_all_banks(period_years: int = 5) -> dict[str, pd.DataFrame]:
     for ticker in BANK_TICKERS:
         try:
             results[ticker] = fetch_stock_data(ticker, period_years)
-            logger.info(f"✅ {ticker} berhasil diambil")
+            logger.info(f"{ticker} berhasil diambil")
         except Exception as e:
-            logger.warning(f"⚠️ {ticker} gagal: {e}")
+            logger.warning(f"{ticker} gagal: {e}")
     return results
 
 
