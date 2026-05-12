@@ -314,7 +314,7 @@ if run_button:
     with col3:
         st.metric("MAPE", f"{metrics.get('MAPE', 0):.2f}%")
     with col4:
-        st.metric("Directional_Accuracy", f"{metrics.get('directional_accuracy', 0):.2f}%")
+        st.metric("Directional Accuracy", f"{metrics.get('Directional_Accuracy', 0):.2f}%")
 
     # 5.CHART AKTUAL vs PREDIKSI
     st.markdown('<div class="section-title">05 · Aktual vs Prediksi (Backtest)</div>', unsafe_allow_html=True)
