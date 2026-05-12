@@ -8,7 +8,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import
-from data_acquisition import fetch_stock_data
+from data_acquisition import fetch_raw_stock_data
+from preprocessing_data import preprocess_stock_data
 from feature_engineering import build_features
 from model import TFTModel
 from evaluation import evaluate_predictions
@@ -223,14 +224,25 @@ if run_button:
     st.markdown('<div class="section-title">01 · Data Acquisition</div>', unsafe_allow_html=True)
     with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
         try:
-            raw_df = fetch_stock_data(ticker, period_years=5)
+            raw_df = fetch_stock_data(ticker, period_years=8)
             st.markdown(f'<div class="info-box">Berhasil mengambil <b>{len(raw_df):,}</b> baris data historis untuk <b>{ticker}</b> ({raw_df.index.min().date()} → {raw_df.index.max().date()})</div>', unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Gagal mengambil data: {e}")
             st.stop()
 
+    # 2.PRE PROCESSING
+    st.markdown('<div class="section-title">02 · Pre-processing Data</div>', unsafe_allow_html=True)
+    with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
+        try:
+            cleaned_df = preprocess_stock_data(raw_df)
+            st.markdown(f'<div class="info-box">Data berhasil melalu proses pre processing</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Gagal preprocsseing data: {e}")
+            st.stop()
+
+    
     # 2.FEATURE ENGINEERING
-    st.markdown('<div class="section-title">02 · Feature Engineering</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">03 · Feature Engineering</div>', unsafe_allow_html=True)
     with st.spinner("Membangun fitur teknis dan temporal..."):
         try:
             featured_df = build_features(raw_df, ticker)
