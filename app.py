@@ -206,15 +206,6 @@ with col_title:
     st.markdown('<div class="main-header">STOCK PREDICTION ENGINE</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="sub-header">{ticker} · {forecast_days}-Day Horizon</div>', unsafe_allow_html=True)
 
-with col_badge:
-    st.markdown("""
-    <div style="text-align:right; padding-top:0.5rem;">
-        <span style="background:#00ff8820; border:1px solid #00ff8840; border-radius:20px;
-                     padding:0.3rem 0.8rem; font-family:'Space Mono',monospace;
-                     font-size:0.65rem; color:#00ff88; letter-spacing:1px;">● LIVE MODEL</span>
-    </div>
-    """, unsafe_allow_html=True)
-
 # Konfigurasi proses utama
 if run_button:
 
