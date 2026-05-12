@@ -337,8 +337,8 @@ if run_button:
 
     # Harga aktual historis (full)
     fig_main.add_trace(go.Scatter(
-        x=featured_df.index[-250:],
-        y=featured_df['close'][-250:],
+        x=featured_df.index[-505:],
+        y=featured_df['close'][-505:],
         mode='lines', name='Aktual (Historis)',
         line=dict(color='#64748b', width=1.5),
         opacity=0.6
