@@ -1,3 +1,16 @@
+"""
+preprocessing_data.py
+═════════════════════
+Modul untuk membersihkan data mentah:
+  · Flatten MultiIndex columns
+  · Lowercase kolom & filter OHLCV
+  · Handling missing values (Interpolasi, ffill, bfill)
+  · Menghapus harga 0 atau negatif
+  · Handling duplikat indeks
+"""
+
+import pandas as pd
+import logging
 
 logger = logging.getLogger(__name__)
 
