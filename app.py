@@ -24,135 +24,95 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+    /* Import Font yang lebih elegan */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     :root {
-        --bg-primary: #0a0e1a;
-        --bg-card: #111827;
-        --bg-elevated: #1a2235;
-        --accent-green: #00ff88;
-        --accent-blue: #3b82f6;
-        --accent-amber: #f59e0b;
-        --accent-red: #ef4444;
-        --text-primary: #f1f5f9;
-        --text-muted: #64748b;
-        --border: #1e293b;
+        --primary: #4f46e5;
+        --text-main: #1e293b;
+        --text-light: #64748b;
+        --bg-light: #f8fafc;
+        --border-color: #e2e8f0;
     }
-    
-    .stApp { background-color: var(--bg-primary) !important; }
-    
+
+    /* Base Layout */
+    .stApp {
+        background-color: white !important;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Header Styling */
     .main-header {
-        font-family: 'Space Mono', monospace;
-        font-size: 2.2rem;
         font-weight: 700;
-        color: var(--accent-green);
-        letter-spacing: -1px;
-        margin-bottom: 0.2rem;
+        font-size: 1.75rem;
+        color: var(--text-main);
+        letter-spacing: -0.02em;
+        margin-bottom: 0.5rem;
     }
     .sub-header {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.95rem;
-        color: var(--text-muted);
-        margin-bottom: 2rem;
+        font-weight: 400;
+        font-size: 1rem;
+        color: var(--text-light);
+        margin-bottom: 2.5rem;
     }
-    .metric-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1.2rem 1.5rem;
-        margin: 0.5rem 0;
-    }
-    .metric-label {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-    }
-    .metric-value {
-        font-family: 'Space Mono', monospace;
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-top: 0.2rem;
-    }
-    .metric-delta-up   { color: var(--accent-green); font-size: 0.85rem; }
-    .metric-delta-down { color: var(--accent-red);   font-size: 0.85rem; }
-    
-    .section-title {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.75rem;
-        color: var(--accent-blue);
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        margin: 1.5rem 0 0.8rem 0;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .section-title::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: var(--border);
-    }
-    .info-box {
-        background: rgba(59,130,246,0.08);
-        border-left: 3px solid var(--accent-blue);
-        border-radius: 0 8px 8px 0;
-        padding: 0.8rem 1rem;
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.85rem;
-        color: #93c5fd;
-        margin: 0.5rem 0;
-    }
-    .warn-box {
-        background: rgba(245,158,11,0.08);
-        border-left: 3px solid var(--accent-amber);
-        border-radius: 0 8px 8px 0;
-        padding: 0.8rem 1rem;
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.85rem;
-        color: #fcd34d;
-        margin: 0.5rem 0;
-    }
-    [data-testid="stSidebar"] {
-        background: var(--bg-card) !important;
-        border-right: 1px solid var(--border);
-    }
-    .stSelectbox label, .stSlider label, .stRadio label {
-        font-family: 'DM Sans', sans-serif;
-        color: var(--text-muted) !important;
-        font-size: 0.85rem;
-    }
+
+    /* Card Styling */
     div[data-testid="stMetric"] {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 1rem;
+        background: white !important;
+        border: 1px solid var(--border-color) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        border-radius: 12px !important;
+        padding: 1.5rem !important;
     }
-    div[data-testid="stMetric"] label {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.7rem !important;
-        color: var(--text-muted) !important;
+
+    /* Section Title */
+    .section-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--primary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
     }
-    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        font-family: 'Space Mono', monospace;
-        color: var(--text-primary) !important;
+
+    /* Clean Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: var(--bg-light) !important;
+        border-right: 1px solid var(--border-color);
     }
+
+    /* Button Styling */
     .stButton button {
-        background: var(--accent-green) !important;
-        color: #0a0e1a !important;
-        font-family: 'Space Mono', monospace !important;
-        font-weight: 700 !important;
-        border: none !important;
+        background-color: var(--primary) !important;
+        color: white !important;
         border-radius: 8px !important;
-        letter-spacing: 0.5px;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease;
     }
     .stButton button:hover {
-        background: #00cc6e !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(0,255,136,0.3) !important;
+        opacity: 0.9;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    }
+
+    /* Info & Warning Boxes */
+    .info-box {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
+        margin: 1rem 0;
+    }
+    
+    /* Plotly Chart refinement */
+    .js-plotly-plot {
+        border-radius: 12px;
+        overflow: hidden;
     }
 </style>
 """, unsafe_allow_html=True)
