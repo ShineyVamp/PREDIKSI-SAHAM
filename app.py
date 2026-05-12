@@ -224,7 +224,7 @@ if run_button:
     st.markdown('<div class="section-title">01 · Data Acquisition</div>', unsafe_allow_html=True)
     with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
         try:
-            raw_df = fetch_stock_data(ticker, period_years=8)
+            raw_df = fetch_stock_data(ticker, period_years=5)
             st.markdown(f'<div class="info-box">Berhasil mengambil <b>{len(raw_df):,}</b> baris data historis untuk <b>{ticker}</b> ({raw_df.index.min().date()} → {raw_df.index.max().date()})</div>', unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Gagal mengambil data: {e}")
