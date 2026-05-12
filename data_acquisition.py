@@ -20,7 +20,7 @@ BANK_TICKERS = {
     "BRIS.JK": "Bank Syariah Indonesia",
 }
 
-def fetch_raw_stock_data(ticker: str, period_years: int = 5) -> pd.DataFrame:
+def fetch_raw_stock_data(ticker: str, period_years: int = 10) -> pd.DataFrame:
     """Mengambil data OHLCV historis mentah dari Yahoo Finance."""
     end_date   = datetime.today()
     # Buffer hari ditambahkan agar saat preprocessing, MA50/indikator lain tidak kekurangan data
