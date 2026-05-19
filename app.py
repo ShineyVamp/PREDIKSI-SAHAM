@@ -129,7 +129,7 @@ with st.sidebar:
     st.markdown('<div class="section-title">Horizon Prediksi</div>', unsafe_allow_html=True)
     forecast_days = st.slider("Hari ke depan", min_value=7, max_value=30, value=30, step=7)
 
-    st.markdown('<div class="section-title">Konurasi Model</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Konfigurasi Model</div>', unsafe_allow_html=True)
     max_epochs = st.slider("Max Epochs", 1, 100, 50, 10)
     learning_rate = st.select_slider(
         "Learning Rate",
@@ -142,10 +142,10 @@ with st.sidebar:
     run_button = st.button("Jalankan Analisis", use_container_width=True)
     
     st.markdown("""
-    <div style="margin-top:2rem; font-family:'DM Sans',sans-serif; font-size:0.72rem; color:#334155; line-height:1.6;">
-    <b style="color:#475569">Model:</b> Temporal Fusion Transformer<br>
-    <b style="color:#475569">Strategi:</b> MIMO (Multi-Input Multi-Output)<br>
-    <b style="color:#475569">Data:</b> 10 Tahun historis via yfinance<br>
+    <div style="margin-top:2rem; font-family:'Inter',sans-serif; font-size:0.72rem; color:var(--text-color); opacity:0.8; line-height:1.6;">
+    <b>Model:</b> Temporal Fusion Transformer<br>
+    <b>Strategi:</b> MIMO (Multi-Input Multi-Output)<br>
+    <b>Data:</b> 10 Tahun historis via yfinance<br>
     </div>
     """, unsafe_allow_html=True)
     
@@ -155,7 +155,7 @@ with col_title:
     st.markdown('<div class="main-header">STOCK PREDICTION ENGINE</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="sub-header">{ticker} · {forecast_days}-Day Horizon</div>', unsafe_allow_html=True)
 
-# Konurasi proses utama
+# Konfigurasi proses utama
 if run_button:
 
     # 1.DATA ACQUISITION
@@ -170,12 +170,12 @@ if run_button:
 
     # 2.PRE PROCESSING
     st.markdown('<div class="section-title">02 · Pre-processing Data</div>', unsafe_allow_html=True)
-    with st.spinner(f"Mengambil data historis {ticker} dari Yahoo Finance..."):
+    with st.spinner(f"Memproses data historis {ticker}..."):
         try:
             cleaned_df = preprocess_stock_data(raw_df)
             st.markdown(f'<div class="info-box">Data berhasil melalu proses pre processing</div>', unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Gagal preprocsseing data: {e}")
+            st.error(f"Gagal preprocessing data: {e}")
             st.stop()
     
     # 2.FEATURE ENGINEERING
@@ -196,7 +196,7 @@ if run_button:
     cached = load_model_cache(cache_key) if use_cache else None
 
     if cached:
-        st.markdown('<div class="warn-box">Model dimuat dari cache — melewati training.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="info-box">Model dimuat dari cache — melewati training.</div>', unsafe_allow_html=True)
         tft_model    = cached["model"]
         predictions  = cached["predictions"]
         actuals      = cached["actuals"]
@@ -289,7 +289,6 @@ if run_button:
         mode='lines', name=f'Forecast {forecast_days}H',
         line=dict(color='#00ff88', width=2.5)
     ))
-    # Area bayangan uncertainty (±5%)
     # Area bayangan uncertainty (DIAMBIL LANGSUNG DARI QUANTILE LOSS)
     upper = list(future_pred['close_upper'])
     lower = list(future_pred['close_lower'])
@@ -308,29 +307,26 @@ if run_button:
         annotation_text="  Today", annotation_font_color="#f59e0b"
     )
 
+    # PERBAIKAN: Menambahkan update_layout dan menghapus warna hardcode
     fig_main.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='#0a0e1a', plot_bgcolor='#0a0e1a',
         height=480,
-        font=dict(family='DM Sans', color='#94a3b8'),
+        font=dict(family='Inter'), 
         legend=dict(
-            bgcolor='#111827', bordercolor='#1e293b', borderwidth=1,
-            font=dict(size=11), orientation='h', y=-0.15
+            orientation='h', y=-0.15
         ),
-        xaxis=dict(gridcolor='#1e293b', showgrid=True, zeroline=False),
-        yaxis=dict(gridcolor='#1e293b', showgrid=True, zeroline=False, title='Harga (IDR)'),
         margin=dict(l=10, r=10, t=20, b=10),
         hovermode='x unified'
     )
-    st.plotly_chart(fig_main, use_container_width=True)
+    # PERBAIKAN: Menambahkan theme="streamlit"
+    st.plotly_chart(fig_main, use_container_width=True, theme="streamlit")
 
     # 6.TABEL PREDIKSI MASA DEPAN
     with st.expander("Detail Tabel Forecast", expanded=False):
         forecast_df = pd.DataFrame({
             'Tanggal':   future_dates.strftime('%Y-%m-%d'),
             'Prediksi (IDR)': [f"Rp {p:,.0f}" for p in future_pred['close']],
-            'Batas Atas': [f"Rp {p:,.0f}" for p in future_pred['close_upper']], # <--- Gunakan data dari AI
-            'Batas Bawah': [f"Rp {p:,.0f}" for p in future_pred['close_lower']], # <--- Gunakan data dari AI
+            'Batas Atas': [f"Rp {p:,.0f}" for p in future_pred['close_upper']], 
+            'Batas Bawah': [f"Rp {p:,.0f}" for p in future_pred['close_lower']], 
             'Change (%)': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred['close']],
         })
         st.dataframe(
@@ -374,41 +370,30 @@ if run_button:
         )
     ))
     
+    # PERBAIKAN: Menambahkan update_layout dan menghapus warna hardcode
     fig_att.update_layout(
         title=dict(
             text="Variable Importance Score",
-            font=dict(size=13, color='#94a3b8'),
+            font=dict(size=13),
             x=0
         ),
-        template='plotly_dark',
-        paper_bgcolor='#111827',
-        plot_bgcolor='#111827',
         height=420,
         margin=dict(l=10, r=20, t=40, b=10),
-        xaxis=dict(
-            gridcolor='#1e293b',
-            title='Importance Score'
-        ),
-        yaxis=dict(
-            gridcolor='#1e293b'
-        ),
         font=dict(
-            family='DM Sans',
-            color='#94a3b8',
+            family='Inter',
             size=11
         )
     )
     
-    st.plotly_chart(fig_att, use_container_width=True)
+    # PERBAIKAN: Menambahkan theme="streamlit"
+    st.plotly_chart(fig_att, use_container_width=True, theme="streamlit")
 
     # 8.ANALISIS TEKNIKAL DENGAN PROYEKSI MASA DEPAN
     st.markdown('<div class="section-title">07 · Analisis Teknikal</div>', unsafe_allow_html=True)
     
     # Hitung Proyeksi RSI dan Volatilitas Masa Depan
-    # 1. Gabungkan data close historis dan prediksi masa depan
-    all_close = pd.concat([featured_df['close'], pd.Series(future_pred['close'], index=future_dates)]) # <--- Tambahkan ['close']
+    all_close = pd.concat([featured_df['close'], pd.Series(future_pred['close'], index=future_dates)]) 
     
-    # 2. Kalkulasi RSI Masa Depan
     delta = all_close.diff()
     gain = delta.where(delta > 0, 0.0)
     loss = -delta.where(delta < 0, 0.0)
@@ -418,14 +403,12 @@ if run_button:
     all_rsi = 100 - (100 / (1 + rs))
     future_rsi = all_rsi[future_dates]
     
-    # 3. Kalkulasi Volatilitas Masa Depan & MA
     future_ma20 = all_close.rolling(20).mean()[future_dates]
     future_ma50 = all_close.rolling(50).mean()[future_dates]
     all_return = all_close.pct_change()
     all_vol = all_return.rolling(20).std()
     future_vol = all_vol[future_dates]
 
-    # Menyiapkan Canvas Grafik
     fig_tech = make_subplots(
         rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.25, 0.25],
         vertical_spacing=0.05,
@@ -457,13 +440,10 @@ if run_button:
     for c in future_pred['close']:
         gap_noise = prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
         o = prev_c + gap_noise
-        
         wick_h = c * np.random.uniform(0.001, recent_vol * 1.5)
         wick_l = c * np.random.uniform(0.001, recent_vol * 1.5)
-        
         h = max(o, c) + wick_h
         l = min(o, c) - wick_l
-        
         sim_open.append(o)
         sim_high.append(h)
         sim_low.append(l)
@@ -532,24 +512,23 @@ if run_button:
 
     fig_tech.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="#f59e0b", line_width=1.5, row='all', col=1)
 
+    # PERBAIKAN: Menambahkan update_layout dan menghapus warna hardcode
     fig_tech.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='#0a0e1a', plot_bgcolor='#0a0e1a',
         height=640, showlegend=True,
-        legend=dict(bgcolor='#111827', bordercolor='#1e293b', orientation='h', y=-0.08),
-        font=dict(family='DM Sans', color='#94a3b8', size=11),
+        legend=dict(orientation='h', y=-0.08),
+        font=dict(family='Inter', size=11),
         xaxis_rangeslider_visible=False,
         margin=dict(l=10, r=10, t=40, b=10)
     )
-    for ax in ['xaxis', 'xaxis2', 'xaxis3', 'yaxis', 'yaxis2', 'yaxis3']:
-        fig_tech.update_layout(**{ax: dict(gridcolor='#1e293b')})
 
-    st.plotly_chart(fig_tech, use_container_width=True)
+    # PERBAIKAN: Menambahkan theme="streamlit"
+    st.plotly_chart(fig_tech, use_container_width=True, theme="streamlit")
 
+    # PERBAIKAN: Menyesuaikan Disclaimer agar adaptif
     st.markdown(f"""
-    <div style="margin-top:2rem; padding:1rem 1.5rem; background:#111827; border:1px solid #1e293b;
-                border-radius:12px; font-family:'DM Sans',sans-serif; font-size:0.8rem; color:#475569;">
-    ⚠️ <b style="color:#64748b">Disclaimer:</b> Prediksi ini dibuat untuk tujuan edukasi dan riset.
+    <div style="margin-top:2rem; padding:1rem 1.5rem; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.2);
+                border-radius:12px; font-family:'Inter',sans-serif; font-size:0.85rem; color:var(--text-color);">
+    ⚠️ <b>Disclaimer:</b> Prediksi ini dibuat untuk tujuan edukasi dan riset.
     Bukan merupakan saran investasi. Selalu lakukan riset mandiri sebelum berinvestasi.
     Model TFT dilatih pada data historis dan tidak menjamin hasil di masa depan.
     </div>
@@ -557,15 +536,13 @@ if run_button:
 
 # Tampilan awal
 else:
+    # PERBAIKAN: Tampilan awal dibuat adaptif
     st.markdown("""
-    <div style="display:flex; align-items:center; justify-content:center; min-height:400px; flex-direction:column; gap:1.5rem; padding:3rem;">
-        <div style="font-size:4rem; opacity:0.3;">📊</div>
-        <div style="font-family:'Space Mono',monospace; font-size:1rem; color:#334155; text-align:center; line-height:1.8;">
-            Pilih saham bank dari sidebar kiri<br>
-            lalu klik <span style="color:#00ff88">🚀 Jalankan Analisis</span><br>
-            <span style="font-size:0.75rem; color:#1e293b; margin-top:0.5rem; display:block;">
-                TFT · MIMO · Multi-Horizon Forecasting
-            </span>
-        </div>
+    <div style="display:flex; align-items:center; justify-content:center; min-height:60vh; flex-direction:column; gap:1rem;">
+        <div style="font-size:3rem;">📈</div>
+        <h2 style="color:var(--text-color); font-weight:600; font-family:'Inter', sans-serif;">Siap untuk Menganalisis?</h2>
+        <p style="color:var(--text-color); opacity:0.7; text-align:center; max-width:400px; font-family:'Inter', sans-serif;">
+            Pilih parameter saham di sidebar dan klik tombol <b>Jalankan Analisis</b> untuk memulai prediksi berbasis Deep Learning.
+        </p>
     </div>
     """, unsafe_allow_html=True)
