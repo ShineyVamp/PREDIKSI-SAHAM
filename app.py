@@ -4,121 +4,71 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
-# Import pipeline modules
-from data_acquisition import fetch_raw_stock_data
+from data_acquisition import fetch_raw_stock_data, fetch_market_context
 from preprocessing_data import preprocess_stock_data
 from feature_engineering import build_features
-from model import TFTModel, BACKEND_NAME, IS_REAL_MODEL
+from model import TFTModel, BACKEND_NAME, IS_REAL_MODEL, future_sessions
 from evaluation import (evaluate_with_baseline, evaluate_per_horizon,
-                        return_space_metrics)
-from decision_engine import (generate_signal, backtest_strategy,
-                             position_size_suggestion, round_trip_cost)
-from utils import load_model_cache, save_model_cache, clear_all_cache
+                        return_space_metrics, aggregate_horizon_metrics)
+from utils import (load_model_cache, save_model_cache,
+                   load_panel_cache, save_panel_cache, clear_all_cache)
 
-# ════════════════════════════════════════════════════════════════════════════
-# KONFIGURASI HALAMAN
-# ════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Prediksi Saham Bank — TFT",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_icon="📈", layout="wide", initial_sidebar_state="expanded",
 )
 
-# Palet warna terpusat. Satu sumber kebenaran agar grafik konsisten.
 PALETTE = {
-    "primary":  "#6366f1",   # indigo
-    "primary2": "#a5b4fc",
-    "success":  "#10b981",   # emerald
-    "danger":   "#ef4444",   # red
-    "warning":  "#f59e0b",   # amber
-    "purple":   "#a78bfa",
-    "neutral":  "#94a3b8",   # slate
+    "primary": "#6366f1", "primary2": "#a5b4fc", "success": "#10b981",
+    "danger": "#ef4444", "warning": "#f59e0b", "purple": "#a78bfa", "neutral": "#94a3b8",
 }
 
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
     html, body, .stApp {{ font-family: 'Inter', sans-serif; }}
-
-    /* Kurangi padding atas default agar header lebih rapat */
     .block-container {{ padding-top: 2.2rem; }}
-
-    /* Kartu hero di bagian atas */
-    .hero {{
-        border-radius: 16px;
-        padding: 1.4rem 1.6rem;
-        background: linear-gradient(135deg, {PALETTE['primary']}14 0%, {PALETTE['success']}10 100%);
-        border: 1px solid {PALETTE['primary']}26;
-        margin-bottom: 1.4rem;
-    }}
-    .hero-title {{
-        font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em;
-        color: var(--text-color); margin: 0;
-    }}
-    .hero-sub {{
-        font-size: 0.92rem; color: var(--text-color); opacity: 0.7; margin-top: 0.25rem;
-    }}
-
-    /* Pil status / badge */
-    .pill {{
-        display: inline-block; padding: 3px 11px; border-radius: 999px;
-        font-size: 0.72rem; font-weight: 600;
-    }}
-
-    /* Judul seksi minimalis di sidebar */
-    .side-label {{
-        font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-        letter-spacing: 0.06em; color: {PALETTE['primary']};
-        margin: 0.4rem 0 0.3rem 0;
-    }}
-
-    /* Tombol utama */
-    .stButton button[kind="primary"] {{
-        background: {PALETTE['primary']} !important; border: none !important;
-        border-radius: 10px !important; font-weight: 600 !important;
-        padding: 0.55rem 1rem !important;
-    }}
-    .stButton button[kind="primary"]:hover {{ filter: brightness(1.05); transform: translateY(-1px); }}
-
-    /* Rapikan label metric */
-    div[data-testid="stMetricLabel"] p {{ font-size: 0.82rem; opacity: 0.8; }}
-    div[data-testid="stMetricValue"] {{ font-weight: 700; }}
+    .hero {{ border-radius:16px; padding:1.4rem 1.6rem;
+        background:linear-gradient(135deg,{PALETTE['primary']}14 0%,{PALETTE['success']}10 100%);
+        border:1px solid {PALETTE['primary']}26; margin-bottom:1.4rem; }}
+    .hero-title {{ font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; margin:0; }}
+    .hero-sub {{ font-size:0.92rem; opacity:0.7; margin-top:0.25rem; }}
+    .pill {{ display:inline-block; padding:3px 11px; border-radius:999px; font-size:0.72rem; font-weight:600; }}
+    .side-label {{ font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;
+        color:{PALETTE['primary']}; margin:0.4rem 0 0.3rem 0; }}
+    .stButton button[kind="primary"] {{ background:{PALETTE['primary']} !important; border:none !important;
+        border-radius:10px !important; font-weight:600 !important; padding:0.55rem 1rem !important; }}
+    div[data-testid="stMetricLabel"] p {{ font-size:0.82rem; opacity:0.8; }}
+    div[data-testid="stMetricValue"] {{ font-weight:700; }}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ════════════════════════════════════════════════════════════════════════════
-# KONSTANTA & HELPER
-# ════════════════════════════════════════════════════════════════════════════
 BANK_OPTIONS = {
-    "BCA — BBCA":      "BBCA.JK",
-    "BRI — BBRI":      "BBRI.JK",
-    "Mandiri — BMRI":  "BMRI.JK",
-    "BNI — BBNI":      "BBNI.JK",
-    "BSI — BRIS":      "BRIS.JK",
+    "BCA — BBCA": "BBCA.JK", "BRI — BBRI": "BBRI.JK", "Mandiri — BMRI": "BMRI.JK",
+    "BNI — BBNI": "BBNI.JK", "BSI — BRIS": "BRIS.JK",
 }
 
-# Preset pelatihan. Pengguna awam cukup memilih salah satu, tanpa perlu paham
-# learning rate atau epoch. Tiap preset memetakan ke nilai teknis yang masuk akal.
 TRAINING_PRESETS = {
-    "Cepat":    {"epochs": 15, "lr": 0.01,  "note": "Hasil tercepat, akurasi paling rendah."},
-    "Seimbang": {"epochs": 40, "lr": 0.003, "note": "Rekomendasi. Keseimbangan waktu dan kualitas."},
-    "Akurat":   {"epochs": 80, "lr": 0.001, "note": "Paling lama. Coba bila hasil 'Seimbang' kurang stabil."},
+    "Cepat":    {"epochs": 15, "lr": 0.01,  "note": "Tercepat, akurasi paling rendah."},
+    "Seimbang": {"epochs": 40, "lr": 0.003, "note": "Rekomendasi. Seimbang waktu dan kualitas."},
+    "Akurat":   {"epochs": 80, "lr": 0.001, "note": "Paling lama. Untuk hasil lebih stabil."},
 }
 
-# Tooltip penjelasan tiap metrik (muncul saat kursor diarahkan ke ikon ?).
-HELP_MAE  = ("Mean Absolute Error. Rata-rata selisih antara harga prediksi dan harga "
-             "asli, dalam Rupiah. Nilai 0 berarti sempurna. Makin kecil makin baik.")
-HELP_RMSE = ("Root Mean Squared Error. Mirip MAE, tetapi kesalahan besar dihukum lebih "
-             "berat. Berguna untuk mendeteksi prediksi yang meleset jauh. Makin kecil makin baik.")
-HELP_MAPE = ("Mean Absolute Percentage Error. Rata-rata kesalahan dalam persen. MAPE 5% "
-             "berarti prediksi rata-rata meleset sekitar 5% dari harga asli. Makin kecil makin baik.")
-HELP_DA   = ("Directional Accuracy. Persentase hari saat model menebak arah (naik atau turun) "
-             "dengan benar. 50% setara menebak lewat lemparan koin. Di atas 55% baru bisa disebut lumayan.")
+PRESET_MODEL_CONFIG = {
+    "Cepat":    {"hidden_size": 16, "attention_head_size": 2, "dropout": 0.20,
+                 "hidden_continuous_size": 8},
+    "Seimbang": {"hidden_size": 32, "attention_head_size": 4, "dropout": 0.15,
+                 "hidden_continuous_size": 16},
+    "Akurat":   {"hidden_size": 48, "attention_head_size": 4, "dropout": 0.10,
+                 "hidden_continuous_size": 24},
+}
+
+HELP_MAE = ("Mean Absolute Error. Rata-rata selisih harga prediksi vs harga asli (Rupiah). "
+            "Makin kecil makin baik.")
+HELP_DA = ("Directional Accuracy. Persentase hari saat arah (naik/turun) ditebak benar. "
+           "50% setara koin. Di atas 55% baru lumayan.")
 
 
 def money(v) -> str:
@@ -126,221 +76,263 @@ def money(v) -> str:
 
 
 def pill(label: str, color: str) -> str:
-    """HTML pil berwarna untuk badge interpretasi."""
     return (f'<span class="pill" style="color:{color};background:{color}1a;'
             f'border:1px solid {color}33;">{label}</span>')
 
 
-def interpret_pct(v: float):
-    """Interpretasi untuk metrik berbasis persen kesalahan (makin kecil makin baik)."""
-    if v < 3:  return ("Baik", PALETTE["success"])
-    if v < 7:  return ("Cukup", PALETTE["warning"])
-    return ("Kurang", PALETTE["danger"])
-
-
 def interpret_da(v: float):
-    """Interpretasi Directional Accuracy. v dalam rentang 0..1."""
     p = v * 100
     if p >= 55: return ("Di atas acak", PALETTE["success"])
     if p >= 50: return ("Setara acak", PALETTE["warning"])
     return ("Di bawah acak", PALETTE["danger"])
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# SIDEBAR — INPUT PENGGUNA
-# ════════════════════════════════════════════════════════════════════════════
+def simulate_scenarios(last_close, median, upper, lower, n_paths=8, seed=0):
+    """
+    Lintasan acak yang KONSISTEN dengan median dan pita ASIMETRIS model.
+    Semi-deviasi atas dan bawah dibongkar terpisah dari pita, lalu kebisingan
+    digambar split-normal (sisi bawah bisa lebih lebar = downside risk). Ini
+    ilustrasi sebaran, BUKAN prediksi arah.
+    """
+    median = np.asarray(median, dtype=float)
+    upper = np.asarray(upper, dtype=float)
+    lower = np.asarray(lower, dtype=float)
+    H = len(median)
+    log_mid = np.log(np.clip(median, 1e-9, None))
+    cum_up = np.clip(np.log(np.clip(upper, 1e-9, None)) - log_mid, 1e-9, None)
+    cum_lo = np.clip(log_mid - np.log(np.clip(lower, 1e-9, None)), 1e-9, None)
+    prev_log = np.concatenate([[np.log(max(last_close, 1e-9))], log_mid[:-1]])
+    drift = log_mid - prev_log
+    up_var = np.clip(cum_up ** 2 - np.concatenate([[0.0], cum_up[:-1] ** 2]), 0.0, None)
+    lo_var = np.clip(cum_lo ** 2 - np.concatenate([[0.0], cum_lo[:-1] ** 2]), 0.0, None)
+    step_up, step_lo = np.sqrt(up_var), np.sqrt(lo_var)
+    rng = np.random.default_rng(seed)
+    paths = np.empty((n_paths, H))
+    for k in range(n_paths):
+        u = rng.normal(0.0, 1.0, H)
+        shock = np.where(u >= 0, u * step_up, u * step_lo)
+        paths[k] = last_close * np.exp(np.cumsum(drift + shock))
+    return paths
+
 with st.sidebar:
     st.markdown('<div class="side-label">Saham Bank</div>', unsafe_allow_html=True)
-    selected_bank_label = st.selectbox(
-        "Pilih bank", list(BANK_OPTIONS.keys()), label_visibility="collapsed",
-    )
+    selected_bank_label = st.selectbox("Pilih bank", list(BANK_OPTIONS.keys()),
+                                       label_visibility="collapsed")
     ticker = BANK_OPTIONS[selected_bank_label]
 
     st.markdown('<div class="side-label">Prediksi Berapa Hari ke Depan</div>', unsafe_allow_html=True)
-    forecast_days = st.slider(
-        "Horizon", min_value=7, max_value=30, value=30, step=1,
-        label_visibility="collapsed",
-        help="Berapa hari kerja ke depan yang ingin diprediksi. Makin jauh, makin tidak pasti.",
-    )
+    forecast_days = st.slider("Horizon", 7, 30, 30, 1, label_visibility="collapsed",
+                              help="Hari kerja ke depan. Makin jauh, makin tidak pasti.")
 
     st.markdown('<div class="side-label">Mode Pelatihan</div>', unsafe_allow_html=True)
-    preset_name = st.radio(
-        "Mode", list(TRAINING_PRESETS.keys()), index=1, horizontal=True,
-        label_visibility="collapsed",
-        help="Mengatur seberapa lama dan teliti model belajar. Tidak perlu paham istilah teknis.",
-    )
+    preset_name = st.radio("Mode", list(TRAINING_PRESETS.keys()), index=1, horizontal=True,
+                           label_visibility="collapsed",
+                           help="Seberapa lama dan teliti model belajar.")
     st.caption(TRAINING_PRESETS[preset_name]["note"])
-
-    # Nilai teknis default berasal dari preset.
     epochs = TRAINING_PRESETS[preset_name]["epochs"]
     learning_rate = TRAINING_PRESETS[preset_name]["lr"]
 
-    st.markdown('<div class="side-label">Keputusan (DSS)</div>', unsafe_allow_html=True)
-    signal_threshold = st.slider(
-        "Ambang sinyal (%)", min_value=0.5, max_value=5.0, value=1.0, step=0.5,
-        label_visibility="collapsed",
-        help="Return bersih minimal (setelah biaya transaksi) agar sistem "
-             "mengeluarkan sinyal Beli. Makin tinggi, makin konservatif. "
-             "Default 1%.",
-    )
-    st.caption(f"Sinyal Beli muncul bila perkiraan untung bersih melebihi {signal_threshold:.1f}%.")
-
-    # Mode lanjutan: hanya untuk yang paham. Tersembunyi secara default.
     with st.expander("Pengaturan lanjutan (opsional)"):
-        st.caption(
-            "Abaikan bagian ini jika Anda tidak yakin. Nilai default sudah aman "
-            "untuk sebagian besar kasus."
-        )
-        manual = st.checkbox("Atur learning rate & epoch secara manual", value=False)
+        st.caption("Semua opsional. Default sudah aman; ubah hanya jika paham efeknya.")
+
+        manual = st.checkbox("Atur learning rate, epoch & dropout manual", value=False)
+        st.caption("Buka konfigurasi model. Jika mati, ketiganya mengikuti Mode Pelatihan yang dipilih.")
+        dropout_override = None
         if manual:
-            epochs = st.slider(
-                "Epoch (jumlah putaran belajar)", 5, 100, epochs, 5,
-                help="Berapa kali model membaca seluruh data saat berlatih. "
-                     "Terlalu sedikit: kurang pintar. Terlalu banyak: hafalan (overfitting). "
-                     "Pelatihan berhenti otomatis jika sudah tidak membaik.",
-            )
-            learning_rate = st.select_slider(
-                "Learning rate (kecepatan belajar)",
-                options=[0.0001, 0.0003, 0.001, 0.003, 0.01],
-                value=learning_rate,
-                help="Seberapa besar langkah model saat memperbaiki diri. "
-                     "Terlalu besar: tidak stabil. Terlalu kecil: lambat.",
-            )
-        use_cache = st.checkbox(
-            "Gunakan hasil tersimpan bila ada", value=True,
-            help="Jika menyala dan kombinasi pengaturan sama persis pernah dijalankan "
-                 "dalam 24 jam terakhir, hasil dipakai ulang tanpa melatih ulang. "
-                 "Jauh lebih cepat.",
-        )
-        panel_mode = st.checkbox(
-            "Latih model gabungan 5 bank (disarankan)", value=False,
-            help="Melatih satu model TFT memakai data kelima bank sekaligus, lalu "
-                 "membuat ramalan untuk bank yang dipilih. Lebih banyak data latih "
-                 "dan membuat fitur ticker bermakna. Konsekuensinya: pelatihan jauh "
-                 "lebih lama. Di Mode Demo, opsi ini tidak mengubah hasil.",
-        )
+            epochs = st.slider("Epoch (maksimum)", 5, 100, epochs, 5,
+                               help="Batas berapa kali model membaca seluruh data latih.")
+            st.caption("**Epoch** = jumlah putaran belajar maksimum. Pelatihan berhenti otomatis "
+                       "(early stopping) bila tak membaik, jadi angka aktual bisa lebih kecil.")
+            learning_rate = st.select_slider("Learning rate",
+                                             options=[0.0001, 0.0003, 0.001, 0.003, 0.01],
+                                             value=learning_rate)
+            st.caption("**Learning rate** = besar langkah tiap pembaruan bobot. Terlalu besar = "
+                       "tidak stabil; terlalu kecil = lambat belajar.")
+            dropout_override = st.select_slider(
+                "Dropout", options=[0.05, 0.10, 0.15, 0.20, 0.30],
+                value=PRESET_MODEL_CONFIG[preset_name]["dropout"])
+            st.caption("**Dropout** = porsi neuron dimatikan acak saat latih untuk cegah overfitting. "
+                       "Turunkan bila model terlalu kaku (underfitting); naikkan bila overfitting.")
+
+        st.divider()
+        show_scenarios = st.checkbox("Tampilkan skenario ilustratif (Monte Carlo)", value=True)
+        st.caption("**Skenario** = 8 lintasan acak yang konsisten dengan rentang ketidakpastian model "
+                   "(garis ungu tipis di grafik Ringkasan). Untuk intuisi sebaran, BUKAN prediksi arah.")
+
+        use_cache = st.checkbox("Gunakan hasil tersimpan bila ada", value=True)
+        st.caption("**Cache** = pakai ulang hasil 24 jam terakhir untuk pengaturan yang sama persis, "
+                   "agar tidak melatih ulang. Matikan untuk memaksa pelatihan baru.")
+
+        panel_mode = st.checkbox("Latih model gabungan 5 bank (panel)", value=False)
+        st.caption("**Mode panel** = satu model dilatih pada kelima bank sekaligus (~5x data latih). "
+                   "Mengatasi keterbatasan data per saham, tapi pelatihan lebih lama.")
+
+        st.divider()
         if st.button("Hapus semua cache", use_container_width=True):
             n = clear_all_cache()
             st.success(f"{n} berkas cache dihapus.")
+        st.caption("Menghapus semua hasil tersimpan di disk. Analisis berikutnya akan melatih dari awal.")
 
     st.divider()
     run_button = st.button("🚀 Jalankan Analisis", type="primary", use_container_width=True)
-
-    st.markdown(
-        f"""<div style="margin-top:1.5rem; font-size:0.72rem; opacity:0.75; line-height:1.7;">
-        <b>Mesin:</b> {BACKEND_NAME}<br>
-        <b>Strategi:</b> MIMO (prediksi {forecast_days} hari sekaligus)<br>
-        <b>Sumber data:</b> Yahoo Finance, 10 tahun<br>
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# HEADER UTAMA + STATUS MESIN
-# ════════════════════════════════════════════════════════════════════════════
-if IS_REAL_MODEL:
-    engine_pill = pill("● Model aktif", PALETTE["success"])
-else:
-    engine_pill = pill("● Mode Demo (simulasi)", PALETTE["warning"])
 
 st.markdown(
     f"""<div class="hero">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
             <div>
                 <p class="hero-title">Prediksi Harga Saham Bank Indonesia</p>
-                <p class="hero-sub">{selected_bank_label} · prediksi {forecast_days} hari ke depan · model Temporal Fusion Transformer</p>
+                <p class="hero-sub">{selected_bank_label} · {forecast_days} hari ke depan · Temporal Fusion Transformer</p>
             </div>
-            <div>{engine_pill}</div>
         </div>
-    </div>""",
-    unsafe_allow_html=True,
-)
+    </div>""", unsafe_allow_html=True)
 
-# Peringatan jujur bila berjalan di mode simulasi.
 if not IS_REAL_MODEL:
-    st.error(
-        "**Mode Demo aktif.** Library model (`pytorch-forecasting`) tidak ditemukan, "
-        "jadi aplikasi memakai **data simulasi**. Semua angka dan grafik di halaman ini "
-        "**bukan** hasil prediksi sungguhan. Jangan dipakai untuk keputusan apa pun. "
-        "Untuk mengaktifkan model asli, jalankan: `pip install -r requirements.txt`."
-    )
+    st.error("**Mode Demo aktif.** `pytorch-forecasting` tidak ditemukan, jadi angka di halaman "
+             "ini **simulasi**, bukan prediksi sungguhan. Jalankan `pip install -r requirements.txt` "
+             "untuk model asli.")
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# PIPELINE — DIJALANKAN SAAT TOMBOL DITEKAN
-# ════════════════════════════════════════════════════════════════════════════
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
+def _load_market_context(years: int) -> pd.DataFrame:
+    """Unduh IHSG & USD/IDR sekali, lalu cache. Mencegah unduh ulang tiap rerun."""
+    try:
+        return fetch_market_context(years)
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
+def _load_featured(ticker: str, years: int, _market_sig: int) -> pd.DataFrame:
+    """Unduh + bersihkan + rekayasa fitur satu ticker, lalu cache by argumen.
+    Tab switch / interaksi UI tidak lagi memicu unduh ulang 10 tahun data."""
+    market = _load_market_context(years)
+    return build_features(preprocess_stock_data(fetch_raw_stock_data(ticker, years)),
+                          ticker, market_df=market)
+
+
 def _build_training_frame(focus_ticker, panel_mode, status_writer):
-    """Bangun dataframe latih. Panel: gabung 5 bank. Single: hanya fokus."""
+    market = _load_market_context(10)
+    market_sig = 1 if (market is not None and not market.empty) else 0
     tickers = list(BANK_OPTIONS.values()) if panel_mode else [focus_ticker]
     frames, focus_featured = [], None
     for tk in tickers:
         try:
-            raw = fetch_raw_stock_data(tk, period_years=10)
-            clean = preprocess_stock_data(raw)
-            feat = build_features(clean, tk)
+            feat = _load_featured(tk, 10, market_sig)
             frames.append(feat)
             if tk == focus_ticker:
                 focus_featured = feat
         except Exception as e:
             status_writer(f"⚠️ Lewati {tk}: {e}")
     if focus_featured is None:
-        # Fokus wajib ada. Kalau gagal di panel, jatuhkan ke single.
-        raw = fetch_raw_stock_data(focus_ticker, period_years=10)
-        focus_featured = build_features(preprocess_stock_data(raw), focus_ticker)
+        focus_featured = _load_featured(focus_ticker, 10, market_sig)
         frames = [focus_featured]
     panel = pd.concat(frames) if len(frames) > 1 else focus_featured
-    return panel, focus_featured, len([f for f in frames])
+    return panel, focus_featured, len(frames)
 
 
 def run_pipeline(ticker, forecast_days, epochs, learning_rate, use_cache,
-                 preset_name, signal_threshold, panel_mode):
-    """Jalankan seluruh proses dan kembalikan dict hasil, atau None bila gagal."""
+                 preset_name, panel_mode, model_config):
     with st.status("Memproses analisis...", expanded=True) as status:
-
         scope = "5 bank (panel)" if panel_mode else "1 bank"
-        st.write(f"📥 Mengambil & menyiapkan data ({scope})...")
+        st.write("📥 Menyiapkan data bank fokus...")
         try:
-            panel_df, featured_df, n_banks = _build_training_frame(
-                ticker, panel_mode, st.write)
+            market = _load_market_context(10)
+            market_sig = 1 if (market is not None and not market.empty) else 0
+            featured_df = _load_featured(ticker, 10, market_sig)
         except Exception as e:
             status.update(label="Gagal menyiapkan data", state="error")
             st.error(f"Gagal menyiapkan data: {e}")
             return None
         n_features = featured_df.shape[1]
-
-        # Latih model (atau ambil dari cache)
-        pflag = f"panel{n_banks}" if panel_mode else "single"
-        cache_key = f"{ticker}_{forecast_days}_{epochs}_{learning_rate}_{pflag}_s5"
-        cached = load_model_cache(cache_key) if use_cache else None
-
-        if cached is not None:
-            st.write("⚡ Memuat hasil dari cache (melewati pelatihan)...")
-            backtest     = cached["backtest"]
-            attn_weights = cached["attention"]
-            future_pred  = cached["future"]
-            from_cache   = True
+        cfg_tag = f"h{model_config['hidden_size']}d{model_config['dropout']}"
+        if panel_mode:
+            cache_key = f"PANEL{len(BANK_OPTIONS)}_{forecast_days}_{epochs}_{learning_rate}_{cfg_tag}_v10"
         else:
-            st.write(f"🧠 Melatih model ({preset_name}: maksimal {epochs} epoch, {scope})...")
-            progress = st.progress(0, text="Inisialisasi model...")
+            cache_key = f"{ticker}_{forecast_days}_{epochs}_{learning_rate}_single_{cfg_tag}_v10"
+        if use_cache:
+            cached = load_panel_cache(cache_key) if panel_mode else load_model_cache(cache_key)
+        else:
+            cached = None
+
+        backtest = attn_weights = future_pred = None
+        n_banks = len(BANK_OPTIONS) if panel_mode else 1
+        from_cache = False
+
+        if cached is not None and panel_mode:
+            per = cached.get("per_ticker", {})
+            if ticker in per:
+                st.write("⚡ Memuat hasil dari cache (model panel, tanpa latih ulang)...")
+                backtest = per[ticker]["backtest"]
+                future_pred = per[ticker]["future"]
+                attn_weights = cached.get("attention", {})
+                n_banks = int(cached.get("n_banks", len(per)))
+                from_cache = True
+            else:
+                cached = None   
+        elif cached is not None:
+            st.write("⚡ Memuat hasil dari cache...")
+            backtest = cached["backtest"]
+            attn_weights = cached["attention"]
+            future_pred = cached["future"]
+            n_banks = 1
+            from_cache = True
+
+        if not from_cache:
+            progress = st.progress(0, text="Inisialisasi...")
+            trained = {"epochs": 0}
 
             def _cb(epoch, total, loss):
+                trained["epochs"] = int(epoch)
                 pct = min(int(epoch / max(total, 1) * 100), 100)
                 progress.progress(pct, text=f"Epoch {epoch}/{total} — loss: {loss:.4f}")
 
             try:
-                model = TFTModel(
-                    ticker=ticker, forecast_horizon=forecast_days,
-                    max_epochs=epochs, learning_rate=learning_rate,
-                )
-                backtest, attn_weights, future_pred = model.fit_predict(
-                    panel_df, progress_callback=_cb,
-                )
-                progress.progress(100, text="Pelatihan selesai")
-                save_model_cache(cache_key, {
-                    "backtest": backtest,
-                    "attention": attn_weights, "future": future_pred,
-                })
+                if panel_mode:
+                    st.write("📥 Menggabungkan data lima bank (panel)...")
+                    panel_df, _focus_feat, n_banks = _build_training_frame(ticker, True, st.write)
+                else:
+                    panel_df, n_banks = featured_df, 1
+
+                st.write(f"🧠 Melatih model ({preset_name}: maks {epochs} epoch, {scope})...")
+                model = TFTModel(ticker=ticker, forecast_horizon=forecast_days,
+                                 max_epochs=epochs, learning_rate=learning_rate,
+                                 config=model_config)
+                backtest, attn_weights, future_pred = model.fit_predict(panel_df, progress_callback=_cb)
+                progress.progress(100, text="Selesai")
+                actual_epochs = trained["epochs"] or epochs
+                if isinstance(attn_weights, dict):
+                    attn_weights["actual_epochs"] = actual_epochs
+
+                if panel_mode:
+                    per_ticker = {str(ticker): {"backtest": backtest, "future": future_pred}}
+                    can_extract = all(hasattr(model, m) for m in
+                                      ("_prepare_dataframe", "_backtest_focus", "_predict_future"))
+                    if can_extract:
+                        st.write("🔁 Menyiapkan hasil untuk seluruh bank panel...")
+                        try:
+                            prepared = model._prepare_dataframe(panel_df)
+                            orig_focus = model.ticker
+                            for tk in prepared["group_id"].unique():
+                                if str(tk) == str(ticker):
+                                    continue
+                                fdf = prepared[prepared["group_id"] == str(tk)].copy()
+                                model.ticker = str(tk)
+                                try:
+                                    per_ticker[str(tk)] = {
+                                        "backtest": model._backtest_focus(fdf),
+                                        "future": model._predict_future(fdf),
+                                    }
+                                except Exception:
+                                    pass       
+                            model.ticker = orig_focus
+                        except Exception:
+                            pass            
+                    n_banks = len(per_ticker)
+                    save_panel_cache(cache_key, attn_weights, per_ticker, n_banks)
+                else:
+                    n_banks = 1
+                    save_model_cache(cache_key, {"backtest": backtest,
+                                                 "attention": attn_weights, "future": future_pred})
             except Exception as e:
                 status.update(label="Pelatihan gagal", state="error")
                 st.error(f"Pelatihan gagal: {e}")
@@ -348,11 +340,12 @@ def run_pipeline(ticker, forecast_days, epochs, learning_rate, use_cache,
                 with st.expander("Detail teknis error"):
                     st.code(traceback.format_exc())
                 return None
-            from_cache = False
+
+        if from_cache:
+            actual_epochs = int(attn_weights.get("actual_epochs", epochs)) if isinstance(attn_weights, dict) else epochs
 
         status.update(label="Analisis selesai", state="complete", expanded=False)
 
-    # ── Evaluasi jujur: model vs baseline random walk ───────────────────────
     preds_1 = np.asarray(backtest.get("preds_1step", []), dtype=float)
     acts_1 = np.asarray(backtest.get("actuals_1step", []), dtype=float)
     P = np.asarray(backtest.get("preds_matrix", np.empty((0, forecast_days))), dtype=float)
@@ -362,90 +355,122 @@ def run_pipeline(ticker, forecast_days, epochs, learning_rate, use_cache,
     baseline = evaluate_with_baseline(acts_1, preds_1)
     per_horizon = evaluate_per_horizon(P, A, anchors)
     ret_metrics = return_space_metrics(acts_1, preds_1)
+    agg = aggregate_horizon_metrics(P, A, anchors)  
+                   
+    last_date = featured_df.index[-1]
+    last_close_val = float(featured_df["close"].iloc[-1])
+    H = len(future_pred["close"])
+    fdates = future_sessions(last_date, H)
 
-    # ── Keputusan + backtest strategi ───────────────────────────────────────
-    last_close = float(featured_df['close'].iloc[-1])
-    decision = generate_signal(
-        last_close=last_close,
-        forecast_close_end=float(future_pred['close'][-1]),
-        lower_end=float(future_pred['close_lower'][-1]),
-        upper_end=float(future_pred['close_upper'][-1]),
-        horizon_days=forecast_days,
-        threshold_pct=signal_threshold,
-    ).to_dict()
-    strategy = backtest_strategy(P, A, anchors, forecast_days, threshold_pct=signal_threshold)
-    daily_vol = float(featured_df['close'].pct_change().tail(60).std())
-    pos_size = position_size_suggestion(daily_vol)
+    all_close = pd.concat([featured_df["close"],
+                           pd.Series(np.asarray(future_pred["close"]), index=fdates)])
+    delta = all_close.diff()
+    gain = delta.clip(lower=0.0)
+    loss = (-delta).clip(lower=0.0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rs = avg_gain / (avg_loss + 1e-8)
+    all_rsi = 100 - (100 / (1 + rs))
+    future_rsi = all_rsi.reindex(fdates).to_numpy()
+    future_ma20 = all_close.rolling(20).mean().reindex(fdates).to_numpy()
+    future_ma50 = all_close.rolling(50).mean().reindex(fdates).to_numpy()
+    future_vol = all_close.pct_change().rolling(20).std().reindex(fdates).to_numpy()
+
+    rng = np.random.default_rng(abs(hash((ticker, forecast_days))) % (2**32))
+    recent_vol = float(featured_df["close"].pct_change().tail(30).std() or 0.015)
+    sim_open, sim_high, sim_low, prev_c = [], [], [], last_close_val
+    for c in np.asarray(future_pred["close"]):
+        o = prev_c + prev_c * rng.uniform(-recent_vol * 0.4, recent_vol * 0.4)
+        hi = max(o, c) + c * rng.uniform(0.001, recent_vol * 1.5)
+        lo = min(o, c) - c * rng.uniform(0.001, recent_vol * 1.5)
+        sim_open.append(o); sim_high.append(hi); sim_low.append(lo); prev_c = c
+
+    has_market = any(c in featured_df.columns and featured_df[c].abs().sum() > 0
+                     for c in ("ihsg_ret", "usdidr_ret"))
 
     return {
         "ticker": ticker, "bank_label": selected_bank_label,
         "forecast_days": forecast_days, "from_cache": from_cache,
         "panel_mode": panel_mode, "n_banks": n_banks,
-        "preset": preset_name if not (use_cache and cached is not None) else "cache",
         "epochs": epochs, "lr": learning_rate, "n_features": n_features,
-        "rows": len(featured_df),
-        "date_min": featured_df.index.min().date(),
-        "date_max": featured_df.index.max().date(),
-        "featured_df": featured_df,
-        "backtest": backtest,
+        "actual_epochs": int(actual_epochs), "max_epochs": int(epochs),
+        "rows": len(featured_df), "has_market": has_market,
+        "val_quantile_loss": (attn_weights.get("val_quantile_loss")
+                              if isinstance(attn_weights, dict) else None),
+        "date_min": featured_df.index.min().date(), "date_max": featured_df.index.max().date(),
+        "featured_df": featured_df, "backtest": backtest,
         "preds_1step": preds_1, "actuals_1step": acts_1,
-        "attn_weights": attn_weights,
-        "future_pred": future_pred,
-        "baseline": baseline,
-        "per_horizon": per_horizon,
-        "ret_metrics": ret_metrics,
-        "decision": decision,
-        "strategy": strategy,
-        "pos_size": pos_size,
-        "signal_threshold": signal_threshold,
+        "attn_weights": attn_weights, "future_pred": future_pred,
+        "baseline": baseline, "per_horizon": per_horizon, "ret_metrics": ret_metrics, "agg": agg,
+        "future_dates": fdates,
+        "future_rsi": future_rsi, "future_ma20": future_ma20, "future_ma50": future_ma50,
+        "future_vol": future_vol,
+        "sim_open": np.array(sim_open), "sim_high": np.array(sim_high), "sim_low": np.array(sim_low),
     }
 
+FEATURE_CATALOG = [
+    ("target", "Target", "Unknown real", "Log-return harian — yang diprediksi model; nilai lampaunya juga jadi input."),
+    ("ret_lag_1", "Momentum", "Unknown real", "Log-return 1 hari lalu."),
+    ("ret_lag_2", "Momentum", "Unknown real", "Log-return 2 hari lalu."),
+    ("ret_lag_3", "Momentum", "Unknown real", "Log-return 3 hari lalu."),
+    ("ret_lag_5", "Momentum", "Unknown real", "Log-return 5 hari lalu (sepekan bursa)."),
+    ("rsi", "Momentum", "Unknown real", "Relative Strength Index (14), skala 0–1. >0,7 jenuh beli; <0,3 jenuh jual."),
+    ("roc_10", "Momentum", "Unknown real", "Rate of Change 10 hari: persentase perubahan harga."),
+    ("macd_norm", "Tren", "Unknown real", "MACD dinormalisasi terhadap harga: selisih EMA12 dan EMA26."),
+    ("price_ma20_gap", "Tren", "Unknown real", "Jarak harga dari rata-rata 20 hari (sinyal mean-reversion)."),
+    ("ma_trend", "Tren", "Unknown real", "Rasio MA20 terhadap MA50: arah tren menengah."),
+    ("vol_20", "Volatilitas", "Unknown real", "Volatilitas realized: simpangan baku log-return 20 hari."),
+    ("bb_pct", "Volatilitas", "Unknown real", "Posisi harga dalam Bollinger Band (0=bawah, 1=atas)."),
+    ("hl_range", "Volatilitas", "Unknown real", "Rentang intraday (high−low) relatif terhadap harga."),
+    ("atr_norm", "Volatilitas", "Unknown real", "Average True Range (14) dinormalisasi terhadap harga."),
+    ("volume_z", "Volume", "Unknown real", "Z-score volume: lonjakan volume relatif terhadap rata-rata 20 hari."),
+    ("ihsg_ret", "Konteks pasar", "Unknown real", "Log-return IHSG (^JKSE): arah pasar modal Indonesia."),
+    ("usdidr_ret", "Konteks pasar", "Unknown real", "Log-return kurs USD/IDR: proksi arus modal asing."),
+    ("day_sin", "Kalender", "Known future", "Komponen siklik hari dalam pekan (sinus)."),
+    ("day_cos", "Kalender", "Known future", "Komponen siklik hari dalam pekan (kosinus)."),
+    ("month_sin", "Kalender", "Known future", "Komponen siklik bulan (sinus)."),
+    ("month_cos", "Kalender", "Known future", "Komponen siklik bulan (kosinus)."),
+    ("dom_sin", "Kalender", "Known future", "Komponen siklik tanggal dalam bulan (sinus)."),
+    ("dom_cos", "Kalender", "Known future", "Komponen siklik tanggal dalam bulan (kosinus)."),
+    ("woy_sin", "Kalender", "Known future", "Komponen siklik pekan dalam tahun (sinus)."),
+    ("woy_cos", "Kalender", "Known future", "Komponen siklik pekan dalam tahun (kosinus)."),
+    ("is_month_end", "Kalender", "Known future", "Penanda akhir bulan (efek turn-of-month)."),
+    ("is_quarter_end", "Kalender", "Known future", "Penanda akhir kuartal (rebalancing/window dressing)."),
+    ("ticker_id", "Identitas", "Static", "Identitas bank (embedding statis pada mode panel)."),
+]
 
-# ════════════════════════════════════════════════════════════════════════════
-# RENDER HASIL
-# ════════════════════════════════════════════════════════════════════════════
+
 def render_results(R):
-    featured_df  = R["featured_df"]
-    predictions  = R["preds_1step"]
-    actuals      = R["actuals_1step"]
+    featured_df = R["featured_df"]
+    predictions = R["preds_1step"]
+    actuals = R["actuals_1step"]
     attn_weights = R["attn_weights"]
-    future_pred  = R["future_pred"]
-    baseline     = R["baseline"]
-    per_horizon  = R["per_horizon"]
-    ret_metrics  = R["ret_metrics"]
-    decision     = R["decision"]
-    strategy     = R["strategy"]
-    pos_size     = R["pos_size"]
+    future_pred = R["future_pred"]
+    baseline = R["baseline"]
+    per_horizon = R["per_horizon"]
+    ret_metrics = R["ret_metrics"]
+    agg = R.get("agg", {})
     forecast_days = R["forecast_days"]
 
-    last_date  = featured_df.index[-1]
-    last_close = float(featured_df['close'].iloc[-1])
+    last_date = featured_df.index[-1]
+    last_close = float(featured_df["close"].iloc[-1])
+    future_dates = pd.DatetimeIndex(R["future_dates"])
 
-    future_dates = pd.date_range(
-        start=last_date + pd.Timedelta(days=1),
-        periods=len(future_pred['close']), freq='B',
-    )
-
-    # Sumber & status baris ringkas
-    src = "diambil dari cache" if R["from_cache"] else f"baru dilatih ({R['epochs']} epoch)"
+    act_ep, max_ep = R.get("actual_epochs", R["epochs"]), R.get("max_epochs", R["epochs"])
+    ep_txt = f"{act_ep} epoch" + (f", berhenti dini dari maks {max_ep}" if act_ep < max_ep else f" (maks {max_ep})")
+    src = "diambil dari cache" if R["from_cache"] else f"baru dilatih ({ep_txt})"
     scope = f"panel {R['n_banks']} bank" if R.get("panel_mode") else "1 bank"
-    st.caption(
-        f"Data: {R['rows']:,} hari ({R['date_min']} → {R['date_max']}) · "
-        f"{R['n_features']} fitur · dilatih pada {scope} · Model {src}."
-    )
+    st.caption(f"Data: {R['rows']:,} hari ({R['date_min']} → {R['date_max']}) · "
+               f"{R['n_features']} kolom fitur · dilatih pada {scope} · Model {src}.")
 
-    tab_ring, tab_dss, tab_tek, tab_int, tab_data = st.tabs(
-        ["📊 Ringkasan", "🎯 Keputusan (DSS)", "📈 Analisis Teknikal",
-         "🔍 Interpretasi Model", "🗂️ Data & Tabel"]
-    )
+    tab_ring, tab_val, tab_tek, tab_int, tab_data = st.tabs(
+        ["📊 Ringkasan", "✅ Validasi Model", "📈 Analisis Teknikal",
+         "🔍 Interpretasi Model", "🗂️ Data & Tabel"])
 
-    # ───────────────────────── TAB 1: RINGKASAN ─────────────────────────
     with tab_ring:
-        # Ringkasan arah prediksi
-        pred_last = float(future_pred['close'][-1])
+        pred_last = float(future_pred["close"][-1])
         change_pct = (pred_last - last_close) / last_close * 100
         arah = "naik" if change_pct >= 0 else "turun"
-        arah_color = PALETTE["success"] if change_pct >= 0 else PALETTE["danger"]
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -453,580 +478,360 @@ def render_results(R):
                 st.metric("Harga terakhir", money(last_close))
         with c2:
             with st.container(border=True):
-                st.metric(
-                    f"Prediksi {forecast_days} hari lagi", money(pred_last),
-                    f"{change_pct:+.2f}%",
-                )
+                st.metric(f"Prediksi {forecast_days} hari lagi", money(pred_last), f"{change_pct:+.2f}%")
         with c3:
             with st.container(border=True):
-                st.metric("Rentang prediksi (akhir)",
-                          f"{money(float(future_pred['close_lower'][-1]))}")
+                st.metric("Rentang prediksi (akhir)", money(float(future_pred["close_lower"][-1])))
                 st.caption(f"hingga {money(float(future_pred['close_upper'][-1]))}")
 
-        st.markdown(
-            f"Model memperkirakan harga cenderung **{arah} {abs(change_pct):.2f}%** "
-            f"dalam {forecast_days} hari kerja ke depan. Angka ini adalah perkiraan, "
-            f"bukan kepastian."
-        )
+        st.markdown(f"Model memperkirakan harga cenderung **{arah} {abs(change_pct):.2f}%** dalam "
+                    f"{forecast_days} hari kerja. Ini perkiraan, bukan kepastian.")
 
-        # Grafik utama: aktual vs backtest vs forecast + rentang keyakinan
         st.markdown("##### Harga: aktual, backtest, dan prediksi")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=featured_df.index[-505:], y=featured_df['close'][-505:],
-            mode='lines', name='Harga asli (historis)',
-            line=dict(color=PALETTE["neutral"], width=1.5), opacity=0.7,
-        ))
+        fig.add_trace(go.Scatter(x=featured_df.index[-505:], y=featured_df["close"][-505:],
+                                 mode="lines", name="Harga asli (historis)",
+                                 line=dict(color=PALETTE["neutral"], width=1.5), opacity=0.7))
         if len(actuals) > 0:
             dates_hist = featured_df.index[-len(actuals):]
-            fig.add_trace(go.Scatter(
-                x=dates_hist, y=predictions, mode='lines',
-                name='Tebakan model (backtest, 1 hari)',
-                line=dict(color=PALETTE["primary"], width=2, dash='dot'),
-            ))
-        # Penghubung tipis dari harga terakhir ke ramalan hari pertama.
-        # Tidak menggeser angka model (bias correction sudah dihapus), jadi
-        # bisa muncul lompatan kecil. Itu jujur: ramalan hari-1 model memang
-        # belum tentu sama persis dengan harga penutupan terakhir.
-        fig.add_trace(go.Scatter(
-            x=[last_date, future_dates[0]],
-            y=[last_close, float(future_pred['close'][0])],
-            mode='lines', line=dict(color=PALETTE["success"], width=1, dash='dot'),
-            showlegend=False, hoverinfo='skip',
-        ))
-        fig.add_trace(go.Scatter(
-            x=list(future_dates),
-            y=list(future_pred['close']),
-            mode='lines', name=f'Prediksi {forecast_days} hari',
-            line=dict(color=PALETTE["success"], width=2.5),
-        ))
-        upper = list(future_pred['close_upper'])
-        lower = list(future_pred['close_lower'])
-        fig.add_trace(go.Scatter(
-            x=list(future_dates) + list(future_dates[::-1]),
-            y=upper + lower[::-1], fill='toself',
-            fillcolor='rgba(16,185,129,0.10)', line=dict(color='rgba(0,0,0,0)'),
-            name='Rentang keyakinan (10–90%)',
-        ))
-        fig.add_vline(
-            x=last_date.timestamp() * 1000, line_dash="dash",
-            line_color=PALETTE["warning"], line_width=1.5,
-            annotation_text="  hari ini", annotation_font_color=PALETTE["warning"],
-        )
-        fig.update_layout(
-            height=460, font=dict(family='Inter'),
-            legend=dict(orientation='h', y=-0.18),
-            margin=dict(l=10, r=10, t=20, b=10), hovermode='x unified',
-        )
-        st.plotly_chart(fig, use_container_width=True, theme="streamlit")
-        st.caption(
-            "**Cara membaca:** garis abu-abu adalah harga asli. Garis biru putus-putus "
-            "adalah tebakan model 1 hari ke depan pada data uji (backtest). Garis hijau "
-            "adalah prediksi ke depan; area hijau muda adalah rentang kemungkinan. "
-            "Lompatan kecil di awal garis hijau itu wajar: angka model tidak lagi "
-            "dipaksa menempel ke harga terakhir."
-        )
+            pred_plot = np.asarray(predictions, dtype=float)
+            pred_plot = np.where(np.isfinite(pred_plot) & (pred_plot > 0), pred_plot, np.nan)
+            fig.add_vrect(x0=dates_hist[0], x1=dates_hist[-1],
+                          fillcolor=PALETTE["primary"], opacity=0.05, line_width=0,
+                          annotation_text="wilayah uji (holdout)", annotation_position="top left",
+                          annotation_font_size=10, annotation_font_color=PALETTE["primary"])
+            fig.add_trace(go.Scatter(x=dates_hist, y=pred_plot, mode="lines", connectgaps=False,
+                                     name="Backtest: prediksi 1 hari ke depan (digulir harian)",
+                                     line=dict(color=PALETTE["primary"], width=2, dash="dot")))
+        fig.add_trace(go.Scatter(x=[last_date, future_dates[0]],
+                                 y=[last_close, float(future_pred["close"][0])],
+                                 mode="lines", line=dict(color=PALETTE["success"], width=1, dash="dot"),
+                                 showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=list(future_dates), y=list(future_pred["close"]),
+                                 mode="lines", name=f"Median prediksi {forecast_days} hari",
+                                 line=dict(color=PALETTE["success"], width=2.5)))
+        upper, lower = list(future_pred["close_upper"]), list(future_pred["close_lower"])
+        fig.add_trace(go.Scatter(x=list(future_dates) + list(future_dates[::-1]),
+                                 y=upper + lower[::-1], fill="toself",
+                                 fillcolor="rgba(16,185,129,0.10)", line=dict(color="rgba(0,0,0,0)"),
+                                 name="Rentang keyakinan (5–95%)"))
 
-        # ── Metrik akurasi: model VS baseline random walk ───────────────────
-        st.markdown("##### Apakah model mengalahkan tebakan acak?")
-        mdl = baseline["model"]
-        nv = baseline["naive"]
-        sk = baseline["skill"]
-        n_eval = int(mdl.get("n_samples", 0))
+        if globals().get("show_scenarios", False):
+            paths = simulate_scenarios(last_close, future_pred["close"], future_pred["close_upper"],
+                                       future_pred["close_lower"], n_paths=8,
+                                       seed=abs(hash(R["ticker"])) % (2**31))
+            for k, p in enumerate(paths):
+                fig.add_trace(go.Scatter(
+                    x=list(future_dates), y=list(p), mode="lines",
+                    line=dict(color=PALETTE["purple"], width=1), opacity=0.28,
+                    legendgroup="scenarios", name="Skenario ilustratif (8 lintasan)",
+                    showlegend=(k == 0), hoverinfo="skip"))
+
+        fig.add_vline(x=last_date.timestamp() * 1000, line_dash="dash",
+                      line_color=PALETTE["warning"], line_width=1.5,
+                      annotation_text="  hari ini", annotation_font_color=PALETTE["warning"])
+        fig.update_layout(height=460, font=dict(family="Inter"),
+                          legend=dict(orientation="h", y=-0.18, groupclick="togglegroup"),
+                          margin=dict(l=10, r=10, t=20, b=10), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True, theme="streamlit")
+
+        with st.expander("📖 Cara membaca grafik ini"):
+            guide = pd.DataFrame({
+                "Elemen": [
+                    "Garis abu-abu", "Area biru muda + garis biru putus-putus",
+                    "Garis kuning putus-putus", "Garis hijau tebal",
+                    "Area hijau", "Garis ungu tipis (opsional)",
+                ],
+                "Arti": [
+                    "Harga penutupan asli (historis).",
+                    "Wilayah uji (holdout) di luar data latih. Garis biru = backtest: tiap titik adalah "
+                    "prediksi 1 hari ke depan yang digulir setiap hari, lalu dibandingkan dengan harga asli.",
+                    "Batas 'hari ini': kiri = masa lalu, kanan = prediksi.",
+                    "Median prediksi ke depan (jalur paling mungkin menurut model).",
+                    "Rentang keyakinan 5–95%, asimetris (sisi bawah bisa lebih panjang = risiko turun) "
+                    "dan melebar ~akar horizon.",
+                    "Skenario acak yang konsisten dengan ketidakpastian model. Ilustrasi sebaran, "
+                    "BUKAN prediksi arah.",
+                ],
+            })
+            st.table(guide)
+
+    with tab_val:
+        mdl, nv, sk = baseline["model"], baseline["naive"], baseline["skill"]
+        n_eval = int(agg.get("n_samples", 0))
 
         if n_eval < 3:
-            st.info(
-                "Data backtest belum cukup untuk menilai. Coba horizon lebih pendek "
-                "atau periode data lebih panjang."
-            )
+            st.info("Data backtest belum cukup. Coba horizon lebih pendek atau periode lebih panjang.")
         else:
-            beats = sk["beats_naive"]
-            ret_beats = ret_metrics["beats_zero_return"]
-            # Verdict utama. Ini pertanyaan terpenting untuk sebuah DSS.
-            if beats and sk["da_edge"] > 0:
-                vcolor, vtext = PALETTE["success"], (
-                    "Model **mengalahkan** baseline random walk pada data uji. "
-                    "Tetap waspada: keunggulan kecil bisa hilang setelah biaya.")
+            beats = agg.get("beats_naive", False)
+            da_all = agg.get("DA", 0.0)
+            if beats and da_all > 0.5:
+                vcolor, vlabel, vtext = PALETTE["success"], "Lulus", ("Pada seluruh horizon, model "
+                    "**mengungguli** baseline harga-datar dan menebak arah benar di atas 50%. Tetap "
+                    "waspada: keunggulan kecil bisa hilang setelah biaya transaksi nyata.")
             elif beats:
-                vcolor, vtext = PALETTE["warning"], (
-                    "Model **sedikit** mengalahkan baseline pada error harga, tapi "
-                    "arah geraknya belum konsisten di atas 50%. Bukti keunggulan lemah.")
+                vcolor, vlabel, vtext = PALETTE["warning"], "Lemah", ("Model **sedikit** mengungguli "
+                    "baseline pada error harga, tapi akurasi arahnya belum konsisten di atas 50%. "
+                    "Bukti keunggulan masih lemah.")
             else:
-                vcolor, vtext = PALETTE["danger"], (
-                    "Model **TIDAK** mengalahkan baseline random walk. Artinya "
-                    "'tebak harga besok = harga hari ini' sama bagus atau lebih baik. "
-                    "Jangan pakai prediksi ini untuk bertaruh.")
-            st.markdown(
-                f"<div style='padding:0.7rem 1rem;border-radius:10px;"
-                f"background:{vcolor}14;border:1px solid {vcolor}40;"
-                f"font-size:0.9rem;'>{vtext}</div>",
-                unsafe_allow_html=True,
-            )
+                vcolor, vlabel, vtext = PALETTE["danger"], "Tidak lulus", ("Pada seluruh horizon, model "
+                    "**tidak** mengungguli baseline harga-datar.")
+            st.markdown(f"<div style='padding:0.8rem 1rem;border-radius:10px;background:{vcolor}14;"
+                        f"border:1px solid {vcolor}40;font-size:0.9rem;'><b>Putusan: {vlabel}.</b> "
+                        f"{vtext}</div>", unsafe_allow_html=True)
             st.write("")
 
+            st.markdown(f"**Metrik utama — rata-rata seluruh {agg.get('n_horizons', forecast_days)} horizon**")
             m1, m2, m3, m4 = st.columns(4)
             with m1:
                 with st.container(border=True):
-                    st.metric("MAE model", money(mdl["MAE"]), help=HELP_MAE)
-                    st.caption(f"Baseline naive: {money(nv['MAE'])}")
+                    st.metric("MAE (semua horizon)", money(agg.get("MAE", 0)), help=HELP_MAE)
+                    st.caption(f"Baseline datar: {money(agg.get('MAE_naive', 0))}")
             with m2:
                 with st.container(border=True):
-                    skill_pct = sk["mae_skill"] * 100
-                    st.metric("Skill vs baseline", f"{skill_pct:+.1f}%",
-                              help="Pengurangan error dibanding random walk. "
-                                   "Positif = lebih baik dari menebak harga kemarin. "
-                                   "Nol atau negatif = tidak berguna.")
-                    st.markdown(
-                        pill("unggul" if skill_pct > 0 else "tidak unggul",
-                             PALETTE["success"] if skill_pct > 0 else PALETTE["danger"]),
-                        unsafe_allow_html=True,
-                    )
+                    st.metric("RMSE (semua horizon)", money(agg.get("RMSE", 0)),
+                              help="Root Mean Squared Error: akar rata-rata galat kuadrat. "
+                                   "Lebih menghukum galat besar daripada MAE.")
             with m3:
                 with st.container(border=True):
-                    da = sk["da"]
-                    da_lbl, da_col = interpret_da(da)
-                    st.metric("Akurasi arah", f"{da*100:.1f}%", help=HELP_DA)
-                    st.markdown(
-                        pill(da_lbl, da_col) +
-                        f"<div style='font-size:0.76rem;opacity:0.75;margin-top:6px;'>"
-                        f"{sk['da_edge']*100:+.1f} poin vs koin (50%).</div>",
-                        unsafe_allow_html=True,
-                    )
+                    st.metric("MAPE (semua horizon)", f"{agg.get('MAPE', 0):.2f}%",
+                              help="Rata-rata galat persentase di seluruh horizon.")
             with m4:
                 with st.container(border=True):
-                    rd = ret_metrics["return_DA"]
-                    st.metric("Arah (ruang return)", f"{rd*100:.1f}%",
-                              help="Akurasi arah dihitung pada return harian, bukan "
-                                   "level harga. Lebih sulit dimanipulasi.")
-                    st.markdown(
-                        pill("kalahkan nol" if ret_beats else "kalah dari nol",
-                             PALETTE["success"] if ret_beats else PALETTE["danger"]),
-                        unsafe_allow_html=True,
-                    )
+                    qloss = R.get("val_quantile_loss")
+                    if qloss is not None and np.isfinite(qloss):
+                        st.metric("Quantile Loss (validasi)", f"{qloss:.5f}",
+                                  help="Pinball loss yang diminimalkan TFT saat pelatihan, diukur pada "
+                                       "data validasi. Makin kecil makin baik.")
+                    else:
+                        st.metric("Quantile Loss (validasi)", "—",
+                                  help="Hanya tersedia saat model TFT asli aktif (bukan mode demo).")
+                        st.caption("Tersedia saat model TFT aktif.")
 
-            # ── Error per horizon: hari ke-1 jauh beda dengan hari ke-30 ─────
+            n2a, n2b = st.columns(2)
+            with n2a:
+                with st.container(border=True):
+                    skill_pct = agg.get("mae_skill", 0) * 100
+                    st.metric("Skill vs baseline", f"{skill_pct:+.1f}%",
+                              help="Pengurangan error rata-rata semua horizon vs harga datar. Positif = lebih baik.")
+                    st.markdown(pill("unggul" if skill_pct > 0 else "tidak unggul",
+                                     PALETTE["success"] if skill_pct > 0 else PALETTE["danger"]),
+                                unsafe_allow_html=True)
+            with n2b:
+                with st.container(border=True):
+                    da_lbl, da_col = interpret_da(da_all)
+                    st.metric("Akurasi arah (semua horizon)", f"{da_all*100:.1f}%",
+                              help="Apakah arah pergerakan dari titik awal sampai tiap horizon tertebak benar. 50% = koin.")
+                    st.markdown(pill(da_lbl, da_col), unsafe_allow_html=True)
+
             if per_horizon is not None and len(per_horizon) > 0:
                 st.markdown("##### Error membesar seiring jarak prediksi")
                 ph = per_horizon.reset_index()
                 fig_h = go.Figure()
-                fig_h.add_trace(go.Scatter(
-                    x=ph["horizon_day"], y=ph["MAE_model"], mode='lines+markers',
-                    name='MAE model', line=dict(color=PALETTE["primary"], width=2),
-                ))
+                fig_h.add_trace(go.Scatter(x=ph["horizon_day"], y=ph["MAE_model"],
+                                           mode="lines+markers", name="MAE model",
+                                           line=dict(color=PALETTE["primary"], width=2)))
                 if "MAE_naive" in ph.columns and ph["MAE_naive"].notna().any():
-                    fig_h.add_trace(go.Scatter(
-                        x=ph["horizon_day"], y=ph["MAE_naive"], mode='lines',
-                        name='MAE baseline (harga datar)',
-                        line=dict(color=PALETTE["neutral"], width=2, dash='dash'),
-                    ))
-                fig_h.update_layout(
-                    height=300, font=dict(family='Inter', size=11),
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation='h', y=-0.25),
-                    xaxis_title="Hari ke depan", yaxis_title="MAE (Rp)",
-                )
+                    fig_h.add_trace(go.Scatter(x=ph["horizon_day"], y=ph["MAE_naive"], mode="lines",
+                                               name="MAE baseline (harga datar)",
+                                               line=dict(color=PALETTE["neutral"], width=2, dash="dash")))
+                fig_h.update_layout(height=300, font=dict(family="Inter", size=11),
+                                    margin=dict(l=10, r=10, t=10, b=10),
+                                    legend=dict(orientation="h", y=-0.25),
+                                    xaxis_title="Hari ke depan", yaxis_title="MAE (Rp)")
                 st.plotly_chart(fig_h, use_container_width=True, theme="streamlit")
-                st.caption(
-                    "Garis model di bawah garis baseline berarti model berguna pada "
-                    "horizon itu. Bila keduanya menempel, model tidak menambah nilai."
-                )
-
-        with st.expander("Kenapa membandingkan dengan baseline itu wajib?"):
-            st.markdown(
-                "- Pada **level harga**, MAPE dan R² hampir selalu terlihat bagus, "
-                "karena harga besok mirip harga hari ini. Menebak 'harga besok = "
-                "harga hari ini' (random walk) saja sudah memberi MAPE ~1% dan R² ~0.98. "
-                "Jadi angka itu **bukan** bukti model pintar.\n"
-                "- Yang berarti adalah **selisih** terhadap baseline tersebut. Kalau "
-                "model tidak mengalahkan random walk, model tidak berguna untuk trading.\n"
-                "- **Akurasi arah** mengukur seberapa sering arah naik/turun ditebak "
-                "benar. 50% setara lemparan koin. Prediksi arah harga harian sangat "
-                "sulit, bahkan untuk model canggih. Bersikaplah skeptis."
-            )
-
-    # ───────────────────────── TAB 2: KEPUTUSAN (DSS) ─────────────────────────
-    with tab_dss:
-        d = decision
-        sig = d["signal"]
-        sig_color = (PALETTE["success"] if sig == "Beli"
-                     else PALETTE["danger"] if sig.startswith("Hindari")
-                     else PALETTE["neutral"])
-
-        st.markdown(
-            f"<div style='padding:1.1rem 1.4rem;border-radius:14px;"
-            f"background:{sig_color}14;border:1px solid {sig_color}45;'>"
-            f"<div style='font-size:0.8rem;opacity:0.7;text-transform:uppercase;"
-            f"letter-spacing:0.05em;'>Sinyal untuk {forecast_days} hari ke depan</div>"
-            f"<div style='font-size:2rem;font-weight:800;color:{sig_color};'>{sig}</div>"
-            f"<div style='font-size:0.9rem;opacity:0.85;'>Keyakinan: {d['strength']} · "
-            f"interval keyakinan: {d['confidence']}</div></div>",
-            unsafe_allow_html=True,
-        )
-        st.write("")
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            with st.container(border=True):
-                st.metric("Perkiraan untung kotor", f"{d['expected_return_pct']:+.2f}%")
-                st.caption("Sebelum biaya transaksi.")
-        with c2:
-            with st.container(border=True):
-                st.metric("Untung bersih perkiraan", f"{d['net_return_pct']:+.2f}%")
-                st.caption(f"Setelah biaya ~{d['cost_pct']:.2f}% (beli + jual).")
-        with c3:
-            with st.container(border=True):
-                st.metric("Ambang sinyal", f"{R['signal_threshold']:.1f}%")
-                st.caption("Bisa diatur di panel kiri.")
-
-        st.markdown(
-            f"<div style='font-size:0.9rem;padding:0.6rem 0;'>{d['rationale']}</div>",
-            unsafe_allow_html=True,
-        )
-
-        st.divider()
-
-        # ── Backtest strategi vs buy-and-hold ───────────────────────────────
-        st.markdown("##### Uji strategi: ikuti sinyal vs beli lalu diamkan")
-        s = strategy
-        if s["n_windows"] < 2:
-            st.info(
-                "Data uji belum cukup untuk mensimulasikan strategi. Perlu lebih "
-                "banyak riwayat atau horizon lebih pendek."
-            )
-        else:
-            verdict_col = PALETTE["success"] if s["beats_buyhold"] else PALETTE["danger"]
-            verdict_txt = ("Strategi berbasis model **mengalahkan** buy-and-hold pada "
-                           "periode uji."
-                           if s["beats_buyhold"] else
-                           "Strategi berbasis model **kalah** dari sekadar beli lalu "
-                           "diamkan. Untuk saham ini, trading aktif tidak terbukti "
-                           "lebih baik.")
-            st.markdown(
-                f"<div style='padding:0.6rem 1rem;border-radius:10px;"
-                f"background:{verdict_col}14;border:1px solid {verdict_col}40;"
-                f"font-size:0.88rem;'>{verdict_txt}</div>",
-                unsafe_allow_html=True,
-            )
-            st.write("")
-
-            eq_s = s["strategy_equity"]
-            eq_b = s["buyhold_equity"]
-            if eq_s and eq_b:
-                fig_e = go.Figure()
-                fig_e.add_trace(go.Scatter(
-                    y=[(v - 1) * 100 for v in eq_s], mode='lines',
-                    name='Strategi (ikuti sinyal)',
-                    line=dict(color=PALETTE["primary"], width=2.5),
-                ))
-                fig_e.add_trace(go.Scatter(
-                    y=[(v - 1) * 100 for v in eq_b], mode='lines',
-                    name='Buy and hold',
-                    line=dict(color=PALETTE["neutral"], width=2, dash='dash'),
-                ))
-                fig_e.update_layout(
-                    height=320, font=dict(family='Inter', size=11),
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation='h', y=-0.22),
-                    xaxis_title="Transaksi ke-", yaxis_title="Imbal hasil kumulatif (%)",
-                )
-                st.plotly_chart(fig_e, use_container_width=True, theme="streamlit")
-
-            k1, k2, k3, k4 = st.columns(4)
-            with k1:
-                with st.container(border=True):
-                    st.metric("Hasil strategi", f"{s['strategy_total_return_pct']:+.1f}%")
-                    st.caption(f"Buy-hold: {s['buyhold_total_return_pct']:+.1f}%")
-            with k2:
-                with st.container(border=True):
-                    st.metric("Sharpe strategi", f"{s['strategy_sharpe']:.2f}",
-                              help="Imbal hasil disesuaikan risiko. Di atas 1 bagus, "
-                                   "di bawah 0 buruk.")
-                    st.caption(f"Buy-hold: {s['buyhold_sharpe']:.2f}")
-            with k3:
-                with st.container(border=True):
-                    st.metric("Penurunan terdalam", f"{s['strategy_max_drawdown_pct']:.1f}%",
-                              help="Kerugian terbesar dari puncak ke lembah. Makin "
-                                   "dangkal makin baik.")
-                    st.caption(f"Buy-hold: {s['buyhold_max_drawdown_pct']:.1f}%")
-            with k4:
-                with st.container(border=True):
-                    st.metric("Akurasi transaksi", f"{s['hit_rate']*100:.0f}%",
-                              help="Persentase transaksi yang menguntungkan.")
-                    st.caption(f"{s['n_trades']} transaksi dari {s['n_windows']} peluang")
-
-        st.divider()
-
-        # ── Ukuran posisi berbasis risiko ──────────────────────────────────
-        st.markdown("##### Saran ukuran posisi (manajemen risiko)")
-        with st.container(border=True):
-            st.markdown(f"**{pos_size.get('note', '-')}**")
-            st.caption(
-                "Ini kerangka sederhana berbasis volatilitas, bukan perintah. "
-                "Posisi lebih kecil pada saham yang lebih bergejolak."
-            )
-
-        st.markdown(
-            f"""<div style="margin-top:1rem; padding:0.9rem 1.2rem;
-            background-color:var(--secondary-background-color);
-            border:1px solid {PALETTE['warning']}40; border-radius:10px; font-size:0.84rem;">
-            ⚠️ Sinyal dan backtest ini bersifat edukatif. Backtest memakai data masa lalu
-            dan tidak menjamin masa depan. Biaya nyata (slippage, spread, pajak) bisa lebih
-            besar. Untuk lima bank likuid dengan horizon mingguan, keunggulan nyata setelah
-            biaya cenderung mendekati nol. Sering kali keputusan paling rasional adalah menahan.
-            </div>""",
-            unsafe_allow_html=True,
-        )
-
-    # ───────────────────────── TAB 3: ANALISIS TEKNIKAL ─────────────────────────
+                st.caption("Garis model di bawah baseline berarti model berguna pada horizon itu. "
+                           "Bila menempel, model tidak menambah nilai.")
     with tab_tek:
-        st.markdown(
-            "Bagian ini menampilkan indikator teknikal yang umum dipakai analis, "
-            "lengkap dengan proyeksinya ke depan (garis putus-putus)."
-        )
+        st.markdown("Indikator teknikal umum beserta proyeksinya (garis putus-putus).")
+        future_rsi = R["future_rsi"]
+        future_ma20 = R["future_ma20"]
+        future_ma50 = R["future_ma50"]
+        future_vol = R["future_vol"]
+        sim_open, sim_high, sim_low = R["sim_open"], R["sim_high"], R["sim_low"]
 
-        # Hitung proyeksi RSI, MA, dan volatilitas dengan menyambung harga prediksi.
-        all_close = pd.concat([
-            featured_df['close'],
-            pd.Series(np.asarray(future_pred['close']), index=future_dates),
-        ])
-        delta = all_close.diff()
-        gain = delta.where(delta > 0, 0.0)
-        loss = -delta.where(delta < 0, 0.0)
-        avg_gain = gain.ewm(com=13, min_periods=14).mean()
-        avg_loss = loss.ewm(com=13, min_periods=14).mean()
-        rs = avg_gain / (avg_loss + 1e-8)
-        all_rsi = 100 - (100 / (1 + rs))
-        future_rsi = all_rsi[future_dates]
-        future_ma20 = all_close.rolling(20).mean()[future_dates]
-        future_ma50 = all_close.rolling(50).mean()[future_dates]
-        all_vol = all_close.pct_change().rolling(20).std()
-        future_vol = all_vol[future_dates]
-
-        fig_t = make_subplots(
-            rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.25, 0.25],
-            vertical_spacing=0.05,
-            subplot_titles=("Harga + rata-rata bergerak", "RSI (14)", "Volatilitas harian (%)"),
-        )
+        fig_t = make_subplots(rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.25, 0.25],
+                              vertical_spacing=0.05,
+                              subplot_titles=("Harga + rata-rata bergerak", "RSI (14)", "Volatilitas harian (%)"))
         plot_df = featured_df.tail(252)
-
-        fig_t.add_trace(go.Candlestick(
-            x=plot_df.index, open=plot_df['open'], high=plot_df['high'],
-            low=plot_df['low'], close=plot_df['close'], name='Harga asli',
-            increasing_line_color=PALETTE["success"], decreasing_line_color=PALETTE["danger"],
-        ), row=1, col=1)
-
-        for col_name, color, label in [('ma_20', PALETTE["warning"], 'MA20'),
-                                       ('ma_50', PALETTE["primary"], 'MA50')]:
+        fig_t.add_trace(go.Candlestick(x=plot_df.index, open=plot_df["open"], high=plot_df["high"],
+                                       low=plot_df["low"], close=plot_df["close"], name="Harga asli",
+                                       increasing_line_color=PALETTE["success"],
+                                       decreasing_line_color=PALETTE["danger"]), row=1, col=1)
+        for col_name, color, label in [("ma_20", PALETTE["warning"], "MA20"),
+                                       ("ma_50", PALETTE["primary"], "MA50")]:
             if col_name in plot_df.columns:
-                fig_t.add_trace(go.Scatter(
-                    x=plot_df.index, y=plot_df[col_name], mode='lines', name=label,
-                    line=dict(color=color, width=1.5),
-                ), row=1, col=1)
+                fig_t.add_trace(go.Scatter(x=plot_df.index, y=plot_df[col_name], mode="lines",
+                                           name=label, line=dict(color=color, width=1.5)), row=1, col=1)
 
-        # Simulasi OHLC masa depan. RNG di-seed agar grafik stabil antar-refresh.
-        np.random.seed(abs(hash((R["ticker"], forecast_days))) % (2**32))
-        recent_vol = featured_df['close'].pct_change().tail(30).std()
-        sim_open, sim_high, sim_low = [], [], []
-        prev_c = last_close
-        for c in np.asarray(future_pred['close']):
-            o = prev_c + prev_c * np.random.uniform(-recent_vol * 0.4, recent_vol * 0.4)
-            h = max(o, c) + c * np.random.uniform(0.001, recent_vol * 1.5)
-            l = min(o, c) - c * np.random.uniform(0.001, recent_vol * 1.5)
-            sim_open.append(o); sim_high.append(h); sim_low.append(l)
-            prev_c = c
+        fig_t.add_trace(go.Candlestick(x=future_dates, open=sim_open, high=sim_high, low=sim_low,
+                                       close=np.asarray(future_pred["close"]), name="Prediksi",
+                                       increasing_line_color="rgba(16,185,129,0.85)",
+                                       decreasing_line_color="rgba(239,68,68,0.85)"), row=1, col=1)
+        if "ma_20" in featured_df.columns:
+            fig_t.add_trace(go.Scatter(x=[last_date] + list(future_dates),
+                                       y=[featured_df["ma_20"].iloc[-1]] + list(future_ma20),
+                                       mode="lines", name="MA20 proyeksi",
+                                       line=dict(color=PALETTE["warning"], width=1.5, dash="dot")), row=1, col=1)
+        if "ma_50" in featured_df.columns:
+            fig_t.add_trace(go.Scatter(x=[last_date] + list(future_dates),
+                                       y=[featured_df["ma_50"].iloc[-1]] + list(future_ma50),
+                                       mode="lines", name="MA50 proyeksi",
+                                       line=dict(color=PALETTE["primary"], width=1.5, dash="dot")), row=1, col=1)
 
-        fig_t.add_trace(go.Candlestick(
-            x=future_dates, open=sim_open, high=sim_high, low=sim_low,
-            close=np.asarray(future_pred['close']), name='Prediksi',
-            increasing_line_color='rgba(16,185,129,0.85)',
-            decreasing_line_color='rgba(239,68,68,0.85)',
-        ), row=1, col=1)
+        hist_rsi = (featured_df["rsi"] * 100) if "rsi" in featured_df.columns else None
+        if hist_rsi is not None:
+            fig_t.add_trace(go.Scatter(x=plot_df.index, y=hist_rsi.tail(252), mode="lines", name="RSI",
+                                       line=dict(color=PALETTE["purple"], width=1.5)), row=2, col=1)
+            fig_t.add_hline(y=70, line_dash="dash", line_color=PALETTE["danger"], row=2, col=1)
+            fig_t.add_hline(y=30, line_dash="dash", line_color=PALETTE["success"], row=2, col=1)
+            last_rsi = float(hist_rsi.iloc[-1])
+            fig_t.add_trace(go.Scatter(x=[last_date] + list(future_dates),
+                                       y=[last_rsi] + list(future_rsi), mode="lines",
+                                       name="RSI proyeksi", line=dict(color=PALETTE["success"], width=2, dash="dot")),
+                            row=2, col=1)
 
-        last_ma20 = featured_df['ma_20'].iloc[-1]
-        fig_t.add_trace(go.Scatter(
-            x=[last_date] + list(future_dates), y=[last_ma20] + list(future_ma20),
-            mode='lines', name='MA20 proyeksi',
-            line=dict(color=PALETTE["warning"], width=1.5, dash='dot'),
-        ), row=1, col=1)
-        last_ma50 = featured_df['ma_50'].iloc[-1]
-        fig_t.add_trace(go.Scatter(
-            x=[last_date] + list(future_dates), y=[last_ma50] + list(future_ma50),
-            mode='lines', name='MA50 proyeksi',
-            line=dict(color=PALETTE["primary"], width=1.5, dash='dot'),
-        ), row=1, col=1)
-
-        if 'rsi' in plot_df.columns:
-            fig_t.add_trace(go.Scatter(
-                x=plot_df.index, y=plot_df['rsi'], mode='lines', name='RSI',
-                line=dict(color=PALETTE["purple"], width=1.5),
-            ), row=2, col=1)
-            fig_t.add_hline(y=70, line_dash='dash', line_color=PALETTE["danger"], row=2, col=1)
-            fig_t.add_hline(y=30, line_dash='dash', line_color=PALETTE["success"], row=2, col=1)
-        last_rsi = featured_df['rsi'].iloc[-1]
-        fig_t.add_trace(go.Scatter(
-            x=[last_date] + list(future_dates), y=[last_rsi] + list(future_rsi),
-            mode='lines', name='RSI proyeksi',
-            line=dict(color=PALETTE["success"], width=2, dash='dot'),
-        ), row=2, col=1)
-
-        if 'volatility' in plot_df.columns:
-            fig_t.add_trace(go.Bar(
-                x=plot_df.index, y=plot_df['volatility'] * 100, name='Volatilitas',
-                marker_color=PALETTE["warning"], opacity=0.7,
-            ), row=3, col=1)
-        fig_t.add_trace(go.Bar(
-            x=future_dates, y=future_vol * 100, name='Volatilitas proyeksi',
-            marker_color=PALETTE["success"], opacity=0.4,
-        ), row=3, col=1)
+        if "vol_20" in featured_df.columns:
+            fig_t.add_trace(go.Bar(x=plot_df.index, y=plot_df["vol_20"] * 100, name="Volatilitas",
+                                   marker_color=PALETTE["warning"], opacity=0.7), row=3, col=1)
+        fig_t.add_trace(go.Bar(x=future_dates, y=future_vol * 100, name="Volatilitas proyeksi",
+                               marker_color=PALETTE["success"], opacity=0.4), row=3, col=1)
 
         fig_t.add_vline(x=last_date.timestamp() * 1000, line_dash="dash",
-                        line_color=PALETTE["warning"], line_width=1.5, row='all', col=1)
-        fig_t.update_layout(
-            height=680, showlegend=True, legend=dict(orientation='h', y=-0.08),
-            font=dict(family='Inter', size=11), xaxis_rangeslider_visible=False,
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
+                        line_color=PALETTE["warning"], line_width=1.5, row="all", col=1)
+        fig_t.update_layout(height=680, showlegend=True, legend=dict(orientation="h", y=-0.08),
+                            font=dict(family="Inter", size=11), xaxis_rangeslider_visible=False,
+                            margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig_t, use_container_width=True, theme="streamlit")
 
         cexp = st.columns(3)
         with cexp[0]:
             st.markdown("**Rata-rata bergerak (MA)**")
-            st.caption(
-                "Harga rata-rata 20 atau 50 hari terakhir. Dipakai untuk melihat arah "
-                "tren tanpa terganggu naik-turun harian. Harga di atas MA biasanya "
-                "dianggap tren naik."
-            )
+            st.caption("Harga rata-rata 20/50 hari terakhir. Menunjukkan arah tren tanpa terganggu "
+                       "naik-turun harian.")
         with cexp[1]:
             st.markdown("**RSI (14)**")
-            st.caption(
-                "Mengukur apakah saham 'kemahalan' (di atas 70, jenuh beli) atau "
-                "'kemurahan' (di bawah 30, jenuh jual). Garis merah dan hijau adalah "
-                "batas tersebut."
-            )
+            st.caption("Jenuh beli (>70) atau jenuh jual (<30). Garis merah/hijau adalah batasnya.")
         with cexp[2]:
             st.markdown("**Volatilitas**")
-            st.caption(
-                "Seberapa liar harga bergerak dalam 20 hari terakhir. Makin tinggi "
-                "batangnya, makin besar risiko dan ketidakpastian."
-            )
+            st.caption("Seberapa liar harga bergerak 20 hari terakhir. Makin tinggi, makin besar risiko.")
 
-    # ───────────────────────── TAB 3: INTERPRETASI MODEL ─────────────────────────
     with tab_int:
-        st.markdown(
-            "Model TFT bisa menunjukkan fitur mana yang paling memengaruhi prediksinya. "
-            "Ini membantu kita memahami *alasan* di balik angka, bukan sekadar menerima hasilnya."
-        )
+        st.markdown("TFT memiliki *variable selection network* yang menunjukkan fitur mana paling "
+                    "berpengaruh. Ini membantu memahami *alasan* di balik prediksi.")
         vi = attn_weights.get("variable_importance", {}) if isinstance(attn_weights, dict) else {}
         if vi:
-            names = list(vi.keys())
-            vals = list(vi.values())
+            names, vals = list(vi.keys()), list(vi.values())
             order = np.argsort(vals)[::-1]
-            fig_v = go.Figure(go.Bar(
-                x=[vals[i] for i in order], y=[names[i] for i in order],
-                orientation='h',
-                marker=dict(
-                    color=[vals[i] for i in order],
-                    colorscale=[[0, PALETTE["primary2"]], [1, PALETTE["primary"]]],
-                    showscale=False,
-                ),
-            ))
-            fig_v.update_layout(
-                title=dict(text="Pengaruh tiap fitur terhadap prediksi", font=dict(size=13), x=0),
-                height=420, margin=dict(l=10, r=20, t=40, b=10),
-                font=dict(family='Inter', size=11),
-            )
+            fig_v = go.Figure(go.Bar(x=[vals[i] for i in order], y=[names[i] for i in order],
+                                     orientation="h",
+                                     marker=dict(color=[vals[i] for i in order],
+                                                 colorscale=[[0, PALETTE["primary2"]], [1, PALETTE["primary"]]],
+                                                 showscale=False)))
+            fig_v.update_layout(title=dict(text="Pengaruh tiap fitur (proporsi)", font=dict(size=13), x=0),
+                                height=460, margin=dict(l=10, r=20, t=40, b=10),
+                                font=dict(family="Inter", size=11))
             st.plotly_chart(fig_v, use_container_width=True, theme="streamlit")
-            st.caption(
-                "**Cara membaca:** batang lebih panjang berarti fitur tersebut lebih "
-                "berpengaruh pada prediksi. Contoh: `close_lag_1` berarti harga penutupan "
-                "kemarin; `rsi` adalah indikator jenuh beli/jual; `ma_20` adalah rata-rata "
-                "20 hari. Wajar bila harga-harga terbaru paling berpengaruh."
-            )
+            st.caption("Batang lebih panjang = fitur lebih berpengaruh. Hanya fitur encoder "
+                       "(masa lalu) yang muncul di sini; rincian semua variabel ada di tabel bawah.")
         else:
-            st.info("Data interpretasi tidak tersedia untuk hasil ini.")
+            st.info("Grafik pengaruh fitur tidak tersedia untuk hasil ini (mode demo atau "
+                    "interpretasi gagal). Tabel variabel di bawah tetap berlaku.")
 
-    # ───────────────────────── TAB 4: DATA & TABEL ─────────────────────────
+        st.markdown("##### Kamus seluruh variabel model")
+        st.caption("Peran: **Unknown real** = hanya diketahui di masa lalu (dipakai encoder). "
+                   "**Known future** = pasti diketahui di masa depan, mis. kalender (dipakai decoder). "
+                   "**Static** = identitas tetap per saham.")
+        catalog_df = pd.DataFrame(
+            [
+                {
+                    "Variabel": n,
+                    "Kelompok": g,
+                    "Peran": role,
+                    "Penjelasan": desc,
+                    "Pengaruh": (
+                        (vi[n][0] if isinstance(vi[n], (tuple, list)) else vi[n]) * 100
+                    )
+                    if n in vi
+                    else np.nan,
+                }
+                for (n, g, role, desc) in FEATURE_CATALOG
+            ]
+        )
+        st.dataframe(
+            catalog_df,
+            column_config={
+                "Pengaruh": st.column_config.NumberColumn(
+                    "Pengaruh",
+                    help="Nilai pengaruh variabel dalam persen",
+                    format="%.2f%%",
+                )
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.caption(
+            "Kolom Pengaruh hanya terisi untuk fitur encoder yang dinilai VSN; fitur "
+            "kalender/identitas dipakai di jalur decoder/statis sehingga tak punya skor encoder."
+        )
+
     with tab_data:
         st.markdown("##### Tabel prediksi harian")
         forecast_df = pd.DataFrame({
-            'Tanggal': future_dates.strftime('%Y-%m-%d'),
-            'Prediksi': [money(p) for p in future_pred['close']],
-            'Batas bawah': [money(p) for p in future_pred['close_lower']],
-            'Batas atas': [money(p) for p in future_pred['close_upper']],
-            'Perubahan': [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred['close']],
+            "Tanggal": future_dates.strftime("%Y-%m-%d"),
+            "Prediksi": [money(p) for p in future_pred["close"]],
+            "Batas bawah": [money(p) for p in future_pred["close_lower"]],
+            "Batas atas": [money(p) for p in future_pred["close_upper"]],
+            "Perubahan": [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred["close"]],
         })
         st.dataframe(forecast_df, use_container_width=True, hide_index=True)
-        st.caption(
-            "Batas bawah dan atas berasal dari kuantil 10% dan 90%. Artinya: model "
-            "memperkirakan harga punya peluang besar berada di antara kedua angka itu, "
-            "tetapi tidak menjamin."
-        )
+        st.caption("Batas bawah/atas = kuantil 5% dan 95%")
 
         st.markdown("##### Ringkasan teknis")
+        _ql = R.get("val_quantile_loss")
         st.json({
-            "ticker": R["ticker"],
-            "horizon_hari": R["forecast_days"],
-            "jumlah_baris_data": R["rows"],
-            "jumlah_fitur": R["n_features"],
+            "ticker": R["ticker"], "horizon_hari": R["forecast_days"],
+            "jumlah_baris_data": R["rows"], "jumlah_kolom_fitur": R["n_features"],
             "rentang_tanggal": f"{R['date_min']} s/d {R['date_max']}",
-            "epoch": R["epochs"],
-            "learning_rate": R["lr"],
+            "target": "log-return harian", "epoch_aktual": R.get("actual_epochs", R["epochs"]),
+            "epoch_maks": R.get("max_epochs", R["epochs"]),
+            "learning_rate": R["lr"], "konteks_pasar": bool(R.get("has_market")),
+            "MAE_semua_horizon": round(float(agg.get("MAE", 0)), 2),
+            "RMSE_semua_horizon": round(float(agg.get("RMSE", 0)), 2),
+            "MAPE_semua_horizon_persen": round(float(agg.get("MAPE", 0)), 2),
+            "quantile_loss_validasi": (round(float(_ql), 6) if (_ql is not None and np.isfinite(_ql)) else None),
             "dari_cache": R["from_cache"],
         })
 
-    # Disclaimer di bawah semua tab
-    st.markdown(
-        f"""<div style="margin-top:1.6rem; padding:1rem 1.4rem;
-        background-color:var(--secondary-background-color);
-        border:1px solid {PALETTE['warning']}40; border-radius:12px; font-size:0.85rem;">
-        ⚠️ <b>Penting.</b> Prediksi ini untuk edukasi dan riset, bukan saran investasi.
-        Harga saham dipengaruhi banyak faktor di luar data historis (berita, kebijakan,
-        kondisi global) yang tidak diketahui model. Pergerakan harga harian sangat dekat
-        dengan acak, sehingga tidak ada model yang bisa menjaminnya. Selalu lakukan riset
-        mandiri dan konsultasi dengan profesional sebelum mengambil keputusan keuangan.
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# ALUR UTAMA
-# ════════════════════════════════════════════════════════════════════════════
 if run_button:
+    _model_config = dict(PRESET_MODEL_CONFIG[preset_name])
+    if dropout_override is not None:
+        _model_config["dropout"] = dropout_override
     result = run_pipeline(ticker, forecast_days, epochs, learning_rate, use_cache,
-                          preset_name, signal_threshold, panel_mode)
+                          preset_name, panel_mode, _model_config)
     if result is not None:
-        # Simpan ke session_state agar hasil tidak hilang saat halaman dimuat ulang
-        # (misalnya ketika pengguna membuka tab atau mengubah widget lain).
         st.session_state["results"] = result
 
 if "results" in st.session_state:
     render_results(st.session_state["results"])
 else:
-    # Tampilan awal / onboarding
     st.markdown(
         """<div style="text-align:center; padding:2.5rem 1rem;">
             <div style="font-size:3rem;">📈</div>
             <h2 style="font-weight:700; margin:0.4rem 0;">Siap menganalisis</h2>
             <p style="opacity:0.7; max-width:520px; margin:0 auto;">
                 Pilih bank dan jumlah hari prediksi di panel kiri, lalu tekan
-                <b>Jalankan Analisis</b>. Aplikasi akan mengambil data, melatih model,
-                dan menampilkan hasilnya dengan penjelasan.
-            </p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+                <b>Jalankan Analisis</b>.</p>
+        </div>""", unsafe_allow_html=True)
     g1, g2, g3 = st.columns(3)
     for col, num, title, desc in [
-        (g1, "1", "Pilih saham", "Lima bank terbesar Indonesia tersedia di panel kiri."),
-        (g2, "2", "Atur prediksi", "Tentukan berapa hari ke depan dan mode pelatihan."),
-        (g3, "3", "Baca hasil", "Grafik dan metrik lengkap dengan penjelasan untuk pemula."),
-    ]:
+        (g1, "1", "Pilih saham", "Lima bank terbesar Indonesia."),
+        (g2, "2", "Atur prediksi", "Tentukan horizon dan mode pelatihan."),
+        (g3, "3", "Baca hasil", "Grafik, validasi, dan interpretasi lengkap.")]:
         with col:
             with st.container(border=True):
-                st.markdown(
-                    f"<div style='font-size:1.3rem;font-weight:800;color:{PALETTE['primary']};'>{num}</div>"
-                    f"<div style='font-weight:600;margin:0.2rem 0;'>{title}</div>"
-                    f"<div style='font-size:0.84rem;opacity:0.7;'>{desc}</div>",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f"<div style='font-size:1.3rem;font-weight:800;color:{PALETTE['primary']};'>{num}</div>"
+                            f"<div style='font-weight:600;margin:0.2rem 0;'>{title}</div>"
+                            f"<div style='font-size:0.84rem;opacity:0.7;'>{desc}</div>",
+                            unsafe_allow_html=True)
