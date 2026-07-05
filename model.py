@@ -1,19 +1,11 @@
 import os
 import numpy as np
 import pandas as pd
-import random
 import warnings
-import torch
 from statistics import NormalDist
 warnings.filterwarnings("ignore")
 
 SEED = 42
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-torch.use_deterministic_algorithms(True, warn_only=True)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
 
 try:
     import torch
@@ -26,8 +18,7 @@ try:
 except ImportError:
     PF_AVAILABLE = False
 
-BACKEND_NAME = "Temporal Fusion Transformer" if PF_AVAILABLE else "Mode Simulasi (Demo)"
-IS_REAL_MODEL = PF_AVAILABLE
+BACKEND_NAME = "Temporal Fusion Transformer"
 
 from feature_engineering import get_feature_groups, calendar_features, TICKER_ID_MAP_STR
 
@@ -35,7 +26,7 @@ DEFAULT_CONFIG = {
     "encoder_length": 63,        
     "hidden_size": 32,
     "attention_head_size": 4,
-    "dropout": 0.15,            
+    "dropout": 0.15,               
     "hidden_continuous_size": 16,
     "batch_size": 64,
     "gradient_clip_val": 0.1,
@@ -44,7 +35,6 @@ DEFAULT_CONFIG = {
 
 
 def _z_from_quantile(q: float) -> float:
-    """Standard-normal inverse CDF. q=0.95 -> ~1.645."""
     q = min(max(q, 1e-4), 1 - 1e-4)
     return float(NormalDist().inv_cdf(q))
 
@@ -65,6 +55,7 @@ def future_sessions(last_date, horizon: int) -> pd.DatetimeIndex:
 
 
 class TFTModel:
+    """Factory: kembalikan model asli bila pustaka tersedia, jika tidak simulasi."""
     def __new__(cls, ticker, forecast_horizon=30, max_epochs=50, learning_rate=0.001, config=None):
         if PF_AVAILABLE:
             return RealTFTModel(ticker, forecast_horizon, max_epochs, learning_rate, config)
@@ -91,9 +82,7 @@ class RealTFTModel:
         train_ds, val_ds = self._create_datasets(panel)
         self._train_dataset = train_ds
 
-        g = torch.Generator()
-        g.manual_seed(SEED)
-        train_loader = train_ds.to_dataloader(train=True, batch_size=self.config["batch_size"],num_workers=0, shuffle=True, generator=g)
+        train_loader = train_ds.to_dataloader(train=True, batch_size=self.config["batch_size"], num_workers=0)
         val_loader = val_ds.to_dataloader(train=False, batch_size=self.config["batch_size"] * 2, num_workers=0)
 
         self.model = TemporalFusionTransformer.from_dataset(
@@ -131,6 +120,9 @@ class RealTFTModel:
         attn_weights = self._extract_attention(val_loader)
         if isinstance(attn_weights, dict):
             attn_weights["val_quantile_loss"] = val_qloss
+            if len(backtest.get("preds_1step", [])) == 0 and \
+                    getattr(self, "last_backtest_error", None):
+                attn_weights["backtest_error"] = str(self.last_backtest_error)
         return backtest, attn_weights, future_pred
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -188,46 +180,76 @@ class RealTFTModel:
             min_prediction_idx=train_cut + 1,
         )
         return training_ds, validation_ds
+        
+    def _predict_returns(self, data_df: pd.DataFrame, min_idx: int,
+                         pred_len_override=None):
+        kwargs = dict(predict=False, stop_randomization=True,
+                      min_prediction_idx=min_idx)
+        if pred_len_override is not None:
+            kwargs["min_prediction_length"] = pred_len_override
+            kwargs["max_prediction_length"] = pred_len_override
+        ds = TimeSeriesDataSet.from_dataset(self._train_dataset, data_df, **kwargs)
+        loader = ds.to_dataloader(train=False,
+                                  batch_size=self.config["batch_size"] * 2,
+                                  num_workers=0)
+        out = self.model.predict(loader, mode="prediction",
+                                 return_x=True, return_y=True,
+                                 trainer_kwargs={"logger": False})
+        preds = out.output if hasattr(out, "output") else out[0]
+        x = out.x if hasattr(out, "x") else out[1]
+        y = out.y if hasattr(out, "y") else out[2]
+        P = (preds[0] if isinstance(preds, (list, tuple)) else preds).cpu().numpy()
+        A = (y[0][0] if isinstance(y[0], (list, tuple)) else y[0]).cpu().numpy()
+        if P.ndim == 1:
+            P = P[:, None]
+        if A.ndim == 1:
+            A = A[:, None]
+        anchors = self._anchors_from_x(x, data_df, n=A.shape[0])
+        dates = self._dates_from_x(x, data_df, n=A.shape[0])
+        return P, A, anchors, dates
+
+    @staticmethod
+    def _prices_from_returns(P_ret, A_ret, anchors):
+        P_price = np.zeros_like(P_ret, dtype=float)
+        A_price = np.zeros_like(A_ret, dtype=float)
+        for i in range(len(anchors)):
+            if not np.isfinite(anchors[i]):
+                continue
+            P_price[i] = anchors[i] * np.exp(np.cumsum(P_ret[i]))
+            A_price[i] = anchors[i] * np.exp(np.cumsum(A_ret[i]))
+        return P_price, A_price
 
     def _backtest_focus(self, focus_df: pd.DataFrame) -> dict:
         _, val_cut = self._split_cutoffs(focus_df)
+        H = self.forecast_horizon
         try:
-            test_ds = TimeSeriesDataSet.from_dataset(
-                self._train_dataset, focus_df, predict=False,
-                stop_randomization=True, min_prediction_idx=val_cut + 1,
-            )
-            test_loader = test_ds.to_dataloader(
-                train=False, batch_size=self.config["batch_size"] * 2, num_workers=0)
-
-            out = self.model.predict(
-                test_loader, mode="prediction",
-                return_x=True, return_y=True, trainer_kwargs={"logger": False})
-            preds = out.output if hasattr(out, "output") else out[0]
-            x = out.x if hasattr(out, "x") else out[1]
-            y = out.y if hasattr(out, "y") else out[2]
-
-            P_ret = (preds[0] if isinstance(preds, (list, tuple)) else preds).cpu().numpy()
-            A_ret = (y[0][0] if isinstance(y[0], (list, tuple)) else y[0]).cpu().numpy()
-            anchors = self._anchors_from_x(x, focus_df, n=A_ret.shape[0])
-
-            P_price = np.zeros_like(P_ret, dtype=float)
-            A_price = np.zeros_like(A_ret, dtype=float)
-            for i in range(len(anchors)):
-                if not np.isfinite(anchors[i]):
-                    continue
-                P_price[i] = anchors[i] * np.exp(np.cumsum(P_ret[i]))
-                A_price[i] = anchors[i] * np.exp(np.cumsum(A_ret[i]))
-
-            return {
-                "preds_matrix": P_price, "actuals_matrix": A_price, "anchors": anchors,
+            P, A, anchors, dates = self._predict_returns(focus_df, val_cut + 1)
+            P_price, A_price = self._prices_from_returns(P, A, anchors)
+            result = {
+                "preds_matrix": P_price, "actuals_matrix": A_price,
+                "anchors": anchors,
                 "preds_1step": P_price[:, 0], "actuals_1step": A_price[:, 0],
+                "pred_dates": dates,
             }
-        except Exception:
-            H = self.forecast_horizon
+        except Exception as e:
+            self.last_backtest_error = repr(e)
             empty = np.empty((0, H))
             return {"preds_matrix": empty, "actuals_matrix": empty,
                     "anchors": np.empty(0), "preds_1step": np.empty(0),
-                    "actuals_1step": np.empty(0)}
+                    "actuals_1step": np.empty(0), "pred_dates": []}
+        try:
+            P1, A1, anch1, dates1 = self._predict_returns(
+                focus_df, val_cut + 1, pred_len_override=1)
+            ok = np.isfinite(anch1) & (anch1 > 0)
+            p1 = np.where(ok, anch1 * np.exp(P1[:, 0]), np.nan)
+            a1 = np.where(ok, anch1 * np.exp(A1[:, 0]), np.nan)
+            if len(dates1) == len(p1) and len(p1) >= len(result["preds_1step"]):
+                result["preds_1step"] = p1
+                result["actuals_1step"] = a1
+                result["pred_dates"] = dates1
+        except Exception:
+            pass
+        return result
 
     def _anchors_from_x(self, x, focus_df: pd.DataFrame, n: int):
         try:
@@ -236,6 +258,19 @@ class RealTFTModel:
             return np.array([float(close_by_idx.get(ti - 1, np.nan)) for ti in t0])
         except Exception:
             return np.full(n, np.nan)
+
+    def _dates_from_x(self, x, focus_df: pd.DataFrame, n: int):
+        """Tanggal awal decoder (t0) tiap sampel backtest, sebagai string ISO."""
+        try:
+            t0 = x.get("decoder_time_idx").cpu().numpy()[:, 0]
+            date_by_idx = focus_df.set_index("time_idx")["date"]
+            out = []
+            for ti in t0:
+                d = date_by_idx.get(int(ti), None)
+                out.append(pd.Timestamp(d).strftime("%Y-%m-%d") if d is not None else "")
+            return out
+        except Exception:
+            return []
 
     def _predict_future(self, focus_df: pd.DataFrame) -> dict:
         enc_len = self.config["encoder_length"]
@@ -265,8 +300,8 @@ class RealTFTModel:
             fp = self.model.predict(floader, mode="quantiles", trainer_kwargs={"logger": False})
 
             qret = fp[0] if isinstance(fp, (list, tuple)) else fp
-            qret = qret.cpu().numpy()[0]         
-            qret = np.sort(qret, axis=1)          
+            qret = qret.cpu().numpy()[0]            
+            qret = np.sort(qret, axis=1)            
 
             quantiles = self.config["quantiles"]
             mid = len(quantiles) // 2
@@ -304,7 +339,7 @@ class RealTFTModel:
             vi = {}
             if "encoder_variables" in interp:
                 enc = np.asarray(interp["encoder_variables"].detach().cpu().numpy()).ravel()
-                enc = enc / (enc.sum() + 1e-12)  
+                enc = enc / (enc.sum() + 1e-12)
                 names = (getattr(self.model, "encoder_variables", None)
                          or list(self._train_dataset.reals))
                 vi = {str(n): float(v) for n, v in zip(names[:len(enc)], enc)}
@@ -314,6 +349,8 @@ class RealTFTModel:
 
 
 class FallbackTFTModel:
+    """Simulasi (dipakai bila pytorch-forecasting tidak terpasang).
+    Berguna untuk menguji alur aplikasi tanpa GPU/pustaka berat."""
     def __init__(self, ticker, forecast_horizon=30, max_epochs=50, learning_rate=0.001, config=None):
         self.ticker = ticker
         self.forecast_horizon = int(forecast_horizon)
