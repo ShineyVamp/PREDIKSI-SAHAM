@@ -4,6 +4,8 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 
+from utils import save_dataframe_cache, load_dataframe_cache
+
 logger = logging.getLogger(__name__)
 
 BANK_TICKERS = {
@@ -16,7 +18,8 @@ BANK_TICKERS = {
 
 MARKET_TICKERS = {"ihsg": "^JKSE", "usdidr": "IDR=X"}
 
-def fetch_raw_stock_data(ticker: str, period_years: int = 10) -> pd.DataFrame:
+
+def _download_raw_stock_data(ticker: str, period_years: int = 10) -> pd.DataFrame:
     end_date = datetime.today()
     start_date = end_date - timedelta(days=period_years * 365 + 120)
 
@@ -31,6 +34,23 @@ def fetch_raw_stock_data(ticker: str, period_years: int = 10) -> pd.DataFrame:
         raise ValueError(f"Tidak ada data untuk '{ticker}'. Periksa simbol.")
     return raw
 
+
+
+def fetch_raw_stock_data(ticker: str, period_years: int = 10) -> pd.DataFrame:
+    cache_key = f"raw_{ticker}_{period_years}y"
+    cached = load_dataframe_cache(cache_key, max_age_hours=6)
+    if cached is not None:
+        return cached
+    try:
+        raw = _download_raw_stock_data(ticker, period_years)
+    except Exception as e:
+        stale = load_dataframe_cache(cache_key, max_age_hours=None)
+        if stale is not None:
+            logger.warning(f"Unduhan {ticker} gagal ({e}); memakai cache lama.")
+            return stale
+        raise
+    save_dataframe_cache(cache_key, raw)
+    return raw
 
 def fetch_market_context(period_years: int = 10) -> pd.DataFrame:
     end_date = datetime.today()
