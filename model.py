@@ -18,8 +18,6 @@ try:
 except ImportError:
     PF_AVAILABLE = False
 
-BACKEND_NAME = "Temporal Fusion Transformer"
-
 from feature_engineering import get_feature_groups, calendar_features, TICKER_ID_MAP_STR
 
 DEFAULT_CONFIG = {
