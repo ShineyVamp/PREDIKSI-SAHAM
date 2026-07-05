@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore")
 from data_acquisition import fetch_raw_stock_data, fetch_market_context
 from preprocessing_data import preprocess_stock_data
 from feature_engineering import build_features
-from model import TFTModel, BACKEND_NAME, future_sessions
+from model import TFTModel, future_sessions
 from evaluation import (evaluate_with_baseline, evaluate_per_horizon,
                         return_space_metrics, aggregate_horizon_metrics)
 from utils import (load_model_cache, save_model_cache,
