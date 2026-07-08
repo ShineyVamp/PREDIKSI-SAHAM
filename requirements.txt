@@ -7,3 +7,4 @@ yfinance
 torch==2.5.1+cpu
 lightning
 pytorch-forecasting
+exchange_calendars 
