@@ -2,7 +2,7 @@ streamlit
 plotly
 pandas
 numpy
-yfinance
+yfinance==0.2.65
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0+cpu
 lightning
