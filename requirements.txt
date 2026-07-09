@@ -4,7 +4,7 @@ pandas
 numpy
 yfinance
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1+cpu
+torch==2.13.0+cpu
 lightning
 pytorch-forecasting
 exchange_calendars 
