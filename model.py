@@ -53,7 +53,6 @@ def future_sessions(last_date, horizon: int) -> pd.DatetimeIndex:
 
 
 class TFTModel:
-    """Factory: kembalikan model asli bila pustaka tersedia, jika tidak simulasi."""
     def __new__(cls, ticker, forecast_horizon=30, max_epochs=50, learning_rate=0.001, config=None):
         if PF_AVAILABLE:
             return RealTFTModel(ticker, forecast_horizon, max_epochs, learning_rate, config)
@@ -258,7 +257,6 @@ class RealTFTModel:
             return np.full(n, np.nan)
 
     def _dates_from_x(self, x, focus_df: pd.DataFrame, n: int):
-        """Tanggal awal decoder (t0) tiap sampel backtest, sebagai string ISO."""
         try:
             t0 = x.get("decoder_time_idx").cpu().numpy()[:, 0]
             date_by_idx = focus_df.set_index("time_idx")["date"]
@@ -347,8 +345,6 @@ class RealTFTModel:
 
 
 class FallbackTFTModel:
-    """Simulasi (dipakai bila pytorch-forecasting tidak terpasang).
-    Berguna untuk menguji alur aplikasi tanpa GPU/pustaka berat."""
     def __init__(self, ticker, forecast_horizon=30, max_epochs=50, learning_rate=0.001, config=None):
         self.ticker = ticker
         self.forecast_horizon = int(forecast_horizon)
