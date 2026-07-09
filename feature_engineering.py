@@ -13,6 +13,7 @@ TICKER_ID_MAP_STR = {k: str(v) for k, v in TICKER_ID_MAP.items()}
 def build_features(cleaned_df: pd.DataFrame, ticker: str,
                    market_df: pd.DataFrame = None) -> pd.DataFrame:
     df = cleaned_df.copy()
+
     df["log_close"] = np.log(df["close"])
     df["target"] = df["log_close"].diff()
 
@@ -39,12 +40,14 @@ def build_features(cleaned_df: pd.DataFrame, ticker: str,
 
 
 def _add_market_context(df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
+    """Gabungkan log-return IHSG & USD/IDR (sejajar tanggal). Bila tak ada, isi 0.
+    Past-only: nilai masa depan tak diketahui, jadi hanya menambah konteks encoder."""
     idx = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.DatetimeIndex(df.index)
     if market_df is not None and not market_df.empty:
         m = market_df.copy()
         m.index = pd.to_datetime(m.index)
         m = m[~m.index.duplicated(keep="last")].sort_index()
-        aligned = m.reindex(idx).ffill()  
+        aligned = m.reindex(idx).ffill()     
         for col in MARKET_COLS:
             df[col] = aligned[col].to_numpy() if col in aligned.columns else 0.0
     else:
@@ -66,7 +69,7 @@ def _add_trend_momentum(df: pd.DataFrame) -> pd.DataFrame:
 
     ma20 = close.rolling(20).mean()
     ma50 = close.rolling(50).mean()
-    df["ma_20"] = ma20          
+    df["ma_20"] = ma20        
     df["ma_50"] = ma50
     df["price_ma20_gap"] = close / (ma20 + EPS) - 1.0
     df["ma_trend"] = ma20 / (ma50 + EPS) - 1.0 
@@ -89,6 +92,7 @@ def _add_volatility_range(df: pd.DataFrame) -> pd.DataFrame:
     bb_upper = ma20 + 2 * bb_std
     bb_lower = ma20 - 2 * bb_std
     df["bb_pct"] = (close - bb_lower) / (bb_upper - bb_lower + EPS)
+
     df["hl_range"] = (high - low) / (close + EPS)
 
     prev_close = close.shift(1)
@@ -106,7 +110,7 @@ def _add_volume(df: pd.DataFrame) -> pd.DataFrame:
         vol = df["volume"].astype(float)
         v_mean = vol.rolling(20).mean()
         v_std = vol.rolling(20).std()
-        df["volume_z"] = (vol - v_mean) / (v_std + EPS)  
+        df["volume_z"] = (vol - v_mean) / (v_std + EPS) 
     else:
         df["volume_z"] = 0.0
     return df
