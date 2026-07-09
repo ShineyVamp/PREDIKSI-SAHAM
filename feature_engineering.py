@@ -40,8 +40,6 @@ def build_features(cleaned_df: pd.DataFrame, ticker: str,
 
 
 def _add_market_context(df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
-    """Gabungkan log-return IHSG & USD/IDR (sejajar tanggal). Bila tak ada, isi 0.
-    Past-only: nilai masa depan tak diketahui, jadi hanya menambah konteks encoder."""
     idx = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.DatetimeIndex(df.index)
     if market_df is not None and not market_df.empty:
         m = market_df.copy()
