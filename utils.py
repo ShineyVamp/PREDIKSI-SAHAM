@@ -17,8 +17,10 @@ logger = logging.getLogger("tft_utils")
 
 CACHE_DIR = Path(".tft_cache")
 CACHE_DIR.mkdir(exist_ok=True)
+DATA_CACHE_DIR = CACHE_DIR / "data"
+DATA_CACHE_DIR.mkdir(exist_ok=True)
 
-CACHE_SCHEMA_VERSION = 10
+CACHE_SCHEMA_VERSION = 11
 CACHE_MAX_AGE_HOURS = 24
 _REQUIRED_FUTURE_KEYS = ("close", "close_lower", "close_upper")
 
@@ -38,13 +40,25 @@ def _deserialize_future(future) -> dict:
 def _serialize_backtest(bt) -> dict:
     if not isinstance(bt, dict):
         return {}
-    return {k: np.asarray(v, dtype=float) for k, v in bt.items()}
+    out = {}
+    for k, v in bt.items():
+        if k == "pred_dates":
+            out[k] = [str(d) for d in v]     
+        else:
+            out[k] = np.asarray(v, dtype=float)
+    return out
 
 
 def _deserialize_backtest(bt) -> dict:
     if not isinstance(bt, dict):
         return {}
-    return {k: np.asarray(v, dtype=float) for k, v in bt.items()}
+    out = {}
+    for k, v in bt.items():
+        if k == "pred_dates":
+            out[k] = list(v)
+        else:
+            out[k] = np.asarray(v, dtype=float)
+    return out
 
 
 def save_model_cache(key: str, data: dict) -> bool:
@@ -143,7 +157,7 @@ def load_panel_cache(key: str):
         for tk, v in data.get("per_ticker", {}).items():
             future = _deserialize_future(v.get("future", {}))
             if not all(k in future and len(future[k]) > 0 for k in _REQUIRED_FUTURE_KEYS):
-                continue       
+                continue        # bank tidak lengkap: lewati, jangan pakai
             per[str(tk)] = {
                 "backtest": _deserialize_backtest(v.get("backtest", {})),
                 "future": future,
@@ -164,9 +178,50 @@ def load_panel_cache(key: str):
         return None
 
 
+def _data_cache_path(key: str) -> Path:
+    safe = hashlib.md5(key.encode()).hexdigest()[:12]
+    return DATA_CACHE_DIR / f"data_{safe}.pkl"
+
+
+def save_dataframe_cache(key: str, df: pd.DataFrame) -> bool:
+    try:
+        df.to_pickle(_data_cache_path(key))
+        logger.info(f"Cache data disimpan: {key} ({len(df)} baris)")
+        return True
+    except Exception as e:
+        logger.warning(f"Gagal menyimpan cache data {key}: {e}")
+        return False
+
+
+def load_dataframe_cache(key: str, max_age_hours=6):
+    path = _data_cache_path(key)
+    if not path.exists():
+        return None
+    try:
+        if max_age_hours is not None:
+            age_h = (datetime.now()
+                     - datetime.fromtimestamp(path.stat().st_mtime)).total_seconds() / 3600
+            if age_h > max_age_hours:
+                return None
+        df = pd.read_pickle(path)
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError("cache data tidak valid")
+        return df
+    except Exception as e:
+        logger.warning(f"Cache data {key} rusak, dihapus: {e}")
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        return None
+
+
 def clear_all_cache() -> int:
     count = 0
     for f in CACHE_DIR.glob("*.pkl"):
+        f.unlink()
+        count += 1
+    for f in DATA_CACHE_DIR.glob("*.pkl"):
         f.unlink()
         count += 1
     logger.info(f"Menghapus {count} file cache.")
