@@ -65,6 +65,7 @@ def naive_last_value(actuals: Arr) -> np.ndarray:
 
 
 def evaluate_with_baseline(actuals: Arr, predictions: Arr) -> dict:
+    """Bandingkan model vs random walk pada prediksi 1-langkah."""
     y_true, y_pred = _clean_pair(actuals, predictions)
     if len(y_true) < 3:
         return {"model": _empty_metrics(), "naive": _empty_metrics(), "skill": _empty_skill()}
@@ -89,6 +90,7 @@ def evaluate_with_baseline(actuals: Arr, predictions: Arr) -> dict:
 
 
 def return_space_metrics(actual_prices: Arr, predicted_prices: Arr) -> dict:
+    """Nilai prediksi PERUBAHAN. Baseline = menebak return 0."""
     a = np.asarray(actual_prices, dtype=np.float64).flatten()
     p = np.asarray(predicted_prices, dtype=np.float64).flatten()
     n = min(len(a), len(p))
