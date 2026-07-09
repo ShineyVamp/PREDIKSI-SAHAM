@@ -6,7 +6,7 @@ from statistics import NormalDist
 warnings.filterwarnings("ignore")
 
 SEED = 42
-BACKEND_NAME = "Temporal Fusion Transformer"
+
 try:
     import torch
     import lightning.pytorch as pl
