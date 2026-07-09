@@ -170,14 +170,6 @@ with st.sidebar:
     st.divider()
     run_button = st.button("🚀 Jalankan Analisis", type="primary", use_container_width=True)
 
-    st.markdown(
-        f"""<div style="margin-top:1.5rem; font-size:0.72rem; opacity:0.75; line-height:1.7;">
-        <b>Mesin:</b> {BACKEND_NAME}<br>
-        <b>Target:</b> log-return harian (direkonstruksi ke harga)<br>
-        <b>Strategi:</b> MIMO (prediksi {forecast_days} hari sekaligus)<br>
-        <b>Sumber data:</b> Yahoo Finance, 10 tahun<br>
-        </div>""", unsafe_allow_html=True)
-
 st.markdown(
     f"""<div class="hero">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
