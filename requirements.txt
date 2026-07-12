@@ -3,8 +3,7 @@ plotly
 pandas
 numpy
 yfinance==0.2.65
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0+cpu
+torch
 lightning
 pytorch-forecasting
 exchange_calendars 
