@@ -678,16 +678,6 @@ def render_results(R):
                 st.caption("Garis model di bawah baseline berarti model berguna pada horizon itu. "
                            "Bila menempel, model tidak menambah nilai.")
 
-        with st.expander("Kenapa membandingkan dengan baseline itu wajib?"):
-            st.markdown(
-                "- Pada **level harga**, MAPE dan R² hampir selalu terlihat bagus karena harga besok "
-                "mirip harga hari ini. Menebak 'harga ke depan = harga terakhir' saja sudah memberi "
-                "MAPE rendah dan R² tinggi. Jadi angka itu **bukan** bukti model pintar.\n"
-                "- Yang berarti adalah **selisih** terhadap baseline harga-datar. Kalau model tidak "
-                "mengungguli baseline, model tidak berguna untuk memprediksi pergerakan.\n"
-                "- **Akurasi arah** mengukur seberapa sering arah naik/turun ditebak benar. 50% setara "
-                "koin. Prediksi arah harga harian sangat sulit. Bersikaplah skeptis.")
-
     with tab_tek:
         st.markdown("Indikator teknikal umum beserta proyeksinya.")
         future_rsi = R["future_rsi"]
