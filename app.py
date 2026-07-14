@@ -851,13 +851,12 @@ else:
                 <b>Jalankan Analisis</b>.</p>
         </div>""", unsafe_allow_html=True)
     g1, g2, g3 = st.columns(3)
-    for col, num, title, desc in [
+    for col, num, title in [
         (g1, "1", "Pilih saham"),
         (g2, "2", "Atur konfigurasi prediksi"),
         (g3, "3", "Baca hasil")]:
         with col:
             with st.container(border=True):
                 st.markdown(f"<div style='font-size:1.3rem;font-weight:800;color:{PALETTE['primary']};'>{num}</div>"
-                            f"<div style='font-weight:600;margin:0.2rem 0;'>{title}</div>"
-                            f"<div style='font-size:0.84rem;opacity:0.7;'>{desc}</div>",
+                            f"<div style='font-weight:600;margin:0.2rem 0;'>{title}</div>",
                             unsafe_allow_html=True)
