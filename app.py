@@ -127,10 +127,10 @@ with st.sidebar:
     learning_rate = TRAINING_PRESETS[preset_name]["lr"]
 
     with st.expander("Pengaturan lanjutan (opsional)"):
-        st.caption("Semua opsional. Default sudah aman; ubah hanya jika paham efeknya.")
+        st.caption("Semua opsional. Default sudah aman, ubah hanya jika paham APA YANG DIGANTI & EFEKNYA.")
 
         manual = st.checkbox("Atur learning rate, epoch & dropout manual", value=False)
-        st.caption("Buka kendali ahli di bawah. Jika mati, ketiganya mengikuti Mode Pelatihan.")
+        st.caption("Buka konfiguasi model jika di checklist. Jika tidak, maka akan default sesuai Mode Pelatihan.")
         dropout_override = None
         if manual:
             epochs = st.slider("Epoch (maksimum)", 5, 100, epochs, 5,
@@ -847,14 +847,14 @@ else:
             <div style="font-size:3rem;">📈</div>
             <h2 style="font-weight:700; margin:0.4rem 0;">Siap menganalisis</h2>
             <p style="opacity:0.7; max-width:520px; margin:0 auto;">
-                Pilih bank dan jumlah hari prediksi di panel kiri, lalu tekan
+                Pilih bank dan jumlah hari prediksi di panel, lalu tekan
                 <b>Jalankan Analisis</b>.</p>
         </div>""", unsafe_allow_html=True)
     g1, g2, g3 = st.columns(3)
     for col, num, title, desc in [
-        (g1, "1", "Pilih saham", "Lima bank terbesar Indonesia."),
-        (g2, "2", "Atur prediksi", "Tentukan horizon dan mode pelatihan."),
-        (g3, "3", "Baca hasil", "Grafik, validasi, dan interpretasi lengkap.")]:
+        (g1, "1", "Pilih saham"),
+        (g2, "2", "Atur konfigurasi prediksi"),
+        (g3, "3", "Baca hasil")]:
         with col:
             with st.container(border=True):
                 st.markdown(f"<div style='font-size:1.3rem;font-weight:800;color:{PALETTE['primary']};'>{num}</div>"
