@@ -450,9 +450,8 @@ def render_results(R):
     ep_txt = f"{act_ep} epoch" + (f", berhenti dini dari maks {max_ep}" if act_ep < max_ep else f" (maks {max_ep})")
     src = "diambil dari cache" if R["from_cache"] else f"baru dilatih ({ep_txt})"
     scope = f"panel {R['n_banks']} bank" if R.get("panel_mode") else "1 bank"
-    market_note = "konteks pasar (IHSG, USD/IDR) aktif" if R.get("has_market") else "tanpa konteks pasar"
     st.caption(f"Data: {R['rows']:,} hari ({R['date_min']} → {R['date_max']}) · "
-               f"{R['n_features']} kolom fitur · {market_note} · dilatih pada {scope} · Model {src}.")
+               f"{R['n_features']} kolom fitur · dilatih pada {scope} · Model {src}.")
 
     tab_ring, tab_val, tab_tek, tab_int, tab_data = st.tabs(
         ["📊 Ringkasan", "✅ Validasi Model", "📈 Analisis Teknikal",
@@ -477,7 +476,7 @@ def render_results(R):
                 st.caption(f"hingga {money(float(future_pred['close_upper'][-1]))}")
 
         st.markdown(f"Model memperkirakan harga cenderung {arah_txt} dalam "
-                    f"{forecast_days} hari kerja. Ini perkiraan, bukan kepastian.")
+                    f"{forecast_days} hari bursa. Ini hanya perkiraan, bukan mutlak.")
 
         st.markdown("##### Harga: aktual, backtest, dan prediksi")
         fig = go.Figure()
@@ -544,32 +543,13 @@ def render_results(R):
                     "prediksi 1 hari ke depan yang digulir setiap hari, lalu dibandingkan dengan harga asli.",
                     "Batas 'hari ini': kiri = masa lalu, kanan = prediksi.",
                     "Median prediksi ke depan (jalur paling mungkin menurut model).",
-                    "Rentang keyakinan 5–95%, asimetris (sisi bawah bisa lebih panjang = risiko turun) "
-                    "dan melebar ~akar horizon.",
+                    "Rentang keyakinan 5–95%.",
                     "Skenario acak yang konsisten dengan ketidakpastian model. Ilustrasi sebaran, "
                     "BUKAN prediksi arah.",
                 ],
             })
             st.table(guide)
-            st.caption("Catatan: garis backtest hanya ada di wilayah holdout, jadi wajar bila lebih "
-                       "pendek dari garis abu-abu. Median yang nyaris datar itu BENAR: untuk return "
-                       "harian, tebakan optimal mendekati nol; grafik yang bergelombang tajam justru "
-                       "menandakan model mengarang pola.")
-
     with tab_val:
-        st.markdown("#### Seberapa andal model ini?")
-        st.markdown(
-            "Halaman ini menguji prediksi model pada **data uji (holdout)** yang tidak pernah dilihat "
-            "saat pelatihan, lalu menjawab dua hal:")
-        st.markdown(
-            "1. **Apakah model lebih baik dari tebakan sederhana?** Pembanding kami adalah baseline "
-            "*harga datar*: menebak harga ke depan = harga terakhir. Untuk saham, ini sulit dikalahkan. "
-            "Kalau model tidak mengungguli baseline, model tidak menambah nilai.\n"
-            "2. **Bagaimana performa di SELURUH horizon?** Model memprediksi "
-            f"{forecast_days} hari sekaligus. Maka metrik utama di bawah adalah **rata-rata semua "
-            f"{forecast_days} hari**, bukan hanya hari pertama. Hari pertama hampir selalu terlihat "
-            "bagus (harga besok mirip hari ini), jadi menampilkannya sendirian akan menyesatkan.")
-        st.divider()
         mdl, nv, sk = baseline["model"], baseline["naive"], baseline["skill"]
         n_eval = int(agg.get("n_samples", 0))
 
@@ -583,23 +563,59 @@ def render_results(R):
         else:
             beats = agg.get("beats_naive", False)
             da_all = agg.get("DA", 0.0)
+        
             if beats and da_all > 0.5:
-                vcolor, vlabel, vtext = PALETTE["success"], "Lulus", ("Pada seluruh horizon, model "
-                    "**mengungguli** baseline harga-datar dan menebak arah benar di atas 50%. Tetap "
-                    "waspada: keunggulan kecil bisa hilang setelah biaya transaksi nyata.")
+                vcolor, vlabel, vtext = (
+                    PALETTE["success"],
+                    "Lulus",
+                    (
+                        "Pada seluruh horizon, model <b>mengungguli</b> baseline harga-datar "
+                        "dan menebak arah dengan benar di atas 50%. "
+                        "Model layak digunakan sebagai alat bantu prediksi."
+                    ),
+                )
+        
             elif beats:
-                vcolor, vlabel, vtext = PALETTE["warning"], "Lemah", ("Model **sedikit** mengungguli "
-                    "baseline pada error harga, tapi akurasi arahnya belum konsisten di atas 50%. "
-                    "Bukti keunggulan masih lemah.")
+                vcolor, vlabel, vtext = (
+                    PALETTE["warning"],
+                    "Lemah",
+                    (
+                        "Model <b>sedikit</b> mengungguli baseline pada error harga, "
+                        "tetapi akurasi arah pergerakan belum konsisten di atas 50%. "
+                        "Bukti keunggulan model masih lemah."
+                    ),
+                )
+        
             else:
-                vcolor, vlabel, vtext = PALETTE["danger"], "Tidak lulus", ("Pada seluruh horizon, model "
-                    "**tidak** mengungguli baseline harga-datar. Untuk saham ini, menahan harga terakhir "
-                    "sama baik atau lebih baik. Jangan dipakai untuk bertaruh.")
-            st.markdown(f"<div style='padding:0.8rem 1rem;border-radius:10px;background:{vcolor}14;"
-                        f"border:1px solid {vcolor}40;font-size:0.9rem;'><b>Putusan: {vlabel}.</b> "
-                        f"{vtext}</div>", unsafe_allow_html=True)
+                vcolor, vlabel, vtext = (
+                    PALETTE["danger"],
+                    "Tidak lulus",
+                    (
+                        "Pada seluruh horizon, model <b>tidak</b> mengungguli baseline harga-datar. "
+                        "Untuk saham ini, menggunakan harga terakhir sebagai prediksi memberikan hasil "
+                        "yang sama baik atau bahkan lebih baik. Model belum layak digunakan untuk "
+                        "pengambilan keputusan investasi."
+                    ),
+                )
+        
+            st.markdown(
+                f"""
+                <div style="
+                    padding:0.8rem 1rem;
+                    border-radius:10px;
+                    background:{vcolor}14;
+                    border:1px solid {vcolor}40;
+                    font-size:0.9rem;
+                    line-height:1.6;
+                ">
+                    <b>Putusan: {vlabel}.</b><br>
+                    {vtext}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        
             st.write("")
-
             st.markdown(f"**Metrik utama — rata-rata seluruh {agg.get('n_horizons', forecast_days)} horizon**")
             m1, m2, m3, m4 = st.columns(4)
             with m1:
@@ -643,16 +659,6 @@ def render_results(R):
                               help="Apakah arah pergerakan dari titik awal sampai tiap horizon tertebak benar. 50% = koin.")
                     st.markdown(pill(da_lbl, da_col), unsafe_allow_html=True)
 
-            with st.expander("Pembanding: performa hanya hari ke-1 (h=1)"):
-                st.caption("Angka 1-langkah biasanya jauh lebih bagus karena harga besok mirip hari ini. "
-                           "Inilah kenapa metrik ini TIDAK dijadikan headline.")
-                s1, s2, s3, s4, s5 = st.columns(5)
-                s1.metric("MAE (h=1)", money(mdl["MAE"]))
-                s2.metric("RMSE (h=1)", money(mdl["RMSE"]))
-                s3.metric("Skill (h=1)", f"{sk['mae_skill']*100:+.1f}%")
-                s4.metric("Akurasi arah (h=1)", f"{sk['da']*100:.1f}%")
-                s5.metric("Arah ruang return (h=1)", f"{ret_metrics['return_DA']*100:.1f}%")
-
             if per_horizon is not None and len(per_horizon) > 0:
                 st.markdown("##### Error membesar seiring jarak prediksi")
                 ph = per_horizon.reset_index()
@@ -683,7 +689,7 @@ def render_results(R):
                 "koin. Prediksi arah harga harian sangat sulit. Bersikaplah skeptis.")
 
     with tab_tek:
-        st.markdown("Indikator teknikal umum beserta proyeksinya (garis putus-putus).")
+        st.markdown("Indikator teknikal umum beserta proyeksinya.")
         future_rsi = R["future_rsi"]
         future_ma20 = R["future_ma20"]
         future_ma50 = R["future_ma50"]
@@ -779,16 +785,44 @@ def render_results(R):
                     "interpretasi gagal). Tabel variabel di bawah tetap berlaku.")
 
         st.markdown("##### Kamus seluruh variabel model")
-        st.caption("Peran: **Unknown real** = hanya diketahui di masa lalu (dipakai encoder). "
-                   "**Known future** = pasti diketahui di masa depan, mis. kalender (dipakai decoder). "
-                   "**Static** = identitas tetap per saham.")
+        
+        st.caption(
+            "Peran: **Unknown real** = hanya diketahui di masa lalu (dipakai encoder). "
+            "**Known future** = pasti diketahui di masa depan, mis. kalender "
+            "(dipakai decoder). **Static** = identitas tetap per saham."
+        )
+        
         catalog_df = pd.DataFrame(
-            [{"Variabel": n, "Kelompok": g, "Peran": role, "Penjelasan": desc,
-              "Pengaruh": (f"{vi[n]*100:.1f}%" if n in vi else "—")}
-             for (n, g, role, desc) in FEATURE_CATALOG])
-        st.dataframe(catalog_df, use_container_width=True, hide_index=True)
-        st.caption("Kolom Pengaruh hanya terisi untuk fitur encoder yang dinilai VSN; fitur "
-                   "kalender/identitas dipakai di jalur decoder/statis sehingga tak punya skor encoder.")
+            [
+                {
+                    "Variabel": n,
+                    "Kelompok": g,
+                    "Peran": role,
+                    "Penjelasan": desc,
+                    "Pengaruh": vi[n] * 100 if n in vi else None,
+                }
+                for (n, g, role, desc) in FEATURE_CATALOG
+            ]
+        )
+        
+        st.dataframe(
+            catalog_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Pengaruh": st.column_config.NumberColumn(
+                    "Pengaruh",
+                    help="Semakin besar nilainya, semakin berpengaruh terhadap prediksi.",
+                    format="%.1f%%",
+                ),
+            },
+        )
+        
+        st.caption(
+            "Kolom Pengaruh hanya terisi untuk fitur encoder yang dinilai VSN; "
+            "fitur kalender/identitas dipakai di jalur decoder/statis sehingga "
+            "tidak memiliki skor pengaruh encoder."
+        )
       
     with tab_data:
         st.markdown("##### Tabel prediksi harian")
@@ -800,7 +834,7 @@ def render_results(R):
             "Perubahan": [f"{((p - last_close)/last_close*100):+.2f}%" for p in future_pred["close"]],
         })
         st.dataframe(forecast_df, use_container_width=True, hide_index=True)
-        st.caption("Batas bawah/atas = kuantil 5% dan 95%, melebar ~akar horizon. Model "
+        st.caption("Batas bawah/atas = kuantil 5% dan 95%. Model "
                    "memperkirakan harga punya peluang besar berada di antaranya, tanpa jaminan.")
 
         st.markdown("##### Ringkasan teknis")
@@ -818,18 +852,7 @@ def render_results(R):
             "quantile_loss_validasi": (round(float(_ql), 6) if (_ql is not None and np.isfinite(_ql)) else None),
             "dari_cache": R["from_cache"],
         })
-
-    st.markdown(
-        f"""<div style="margin-top:1.6rem; padding:1rem 1.4rem;
-        background-color:var(--secondary-background-color);
-        border:1px solid {PALETTE['warning']}40; border-radius:12px; font-size:0.85rem;">
-        ⚠️ <b>Penting.</b> Prediksi ini untuk edukasi dan riset, bukan saran investasi.
-        Harga saham dipengaruhi banyak faktor di luar data historis (berita, kebijakan, kondisi
-        global) yang tidak diketahui model. Pergerakan harga harian sangat dekat dengan acak,
-        sehingga tidak ada model yang bisa menjaminnya. Lakukan riset mandiri dan konsultasi
-        dengan profesional sebelum mengambil keputusan keuangan.
-        </div>""", unsafe_allow_html=True)
-
+      
 if run_button:
     _model_config = dict(PRESET_MODEL_CONFIG[preset_name])
     if dropout_override is not None:
