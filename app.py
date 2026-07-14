@@ -592,8 +592,7 @@ def render_results(R):
                     "Tidak lulus",
                     (
                         "Pada seluruh horizon, model <b>tidak</b> mengungguli baseline harga-datar. "
-                        "Untuk saham ini, menggunakan harga terakhir sebagai prediksi memberikan hasil "
-                        "yang sama baik atau bahkan lebih baik. Model belum layak digunakan untuk "
+                        "Model belum layak digunakan untuk "
                         "pengambilan keputusan investasi."
                     ),
                 )
