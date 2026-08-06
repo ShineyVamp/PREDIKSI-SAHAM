@@ -182,7 +182,6 @@ st.markdown(
 
 @st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
 def _load_market_context(years: int) -> pd.DataFrame:
-    """Unduh IHSG & USD/IDR sekali, lalu cache. Mencegah unduh ulang tiap rerun."""
     try:
         return fetch_market_context(years)
     except Exception:
@@ -191,8 +190,6 @@ def _load_market_context(years: int) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
 def _load_featured(ticker: str, years: int, _market_sig: int) -> pd.DataFrame:
-    """Unduh + bersihkan + rekayasa fitur satu ticker, lalu cache by argumen.
-    Tab switch / interaksi UI tidak lagi memicu unduh ulang 10 tahun data."""
     market = _load_market_context(years)
     return build_features(preprocess_stock_data(fetch_raw_stock_data(ticker, years)),
                           ticker, market_df=market)
