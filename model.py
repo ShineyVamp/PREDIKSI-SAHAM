@@ -102,7 +102,7 @@ class RealTFTModel:
             gradient_clip_val=self.config["gradient_clip_val"],
             callbacks=[callback, early_stop],
             enable_progress_bar=False, enable_model_summary=False,
-            logger=False, accelerator="auto", deterministic=False,
+            logger=False, accelerator="auto", deterministic="warn",
         )
         trainer.fit(self.model, train_loader, val_loader)
 
@@ -313,7 +313,8 @@ class RealTFTModel:
         except Exception:
             daily = float(focus_df["close"].pct_change().tail(60).std() or 0.015)
             steps = np.arange(1, H + 1)
-            spread = 1.2816 * daily * np.sqrt(steps)
+            z = abs(_z_from_quantile(self.config["quantiles"][-1]))   
+            spread = z * daily * np.sqrt(steps)
             return {"close": np.array([last_close] * H, dtype=float),
                     "close_lower": last_close * np.exp(-spread),
                     "close_upper": last_close * np.exp(spread)}
@@ -370,7 +371,7 @@ class FallbackTFTModel:
         n = len(close)
         val_cut = int(n * 0.85)
         starts = list(range(max(val_cut, 1), max(n - H, 1)))
-        rng = np.random.default_rng(abs(hash(self.ticker)) % (2**31))
+        rng = np.random.default_rng(zlib.crc32(str(self.ticker).encode()) % (2**31))
 
         preds, acts, anchors = [], [], []
         for s in starts:
@@ -394,7 +395,8 @@ class FallbackTFTModel:
         steps = np.arange(1, H + 1)
         drift = rng.normal(0, daily, H)
         path = last * np.exp(np.cumsum(drift))
-        spread = 1.2816 * daily * np.sqrt(steps)
+        z = abs(_z_from_quantile(self.config["quantiles"][-1]))  
+        spread = z * daily * np.sqrt(steps)
         future = {"close": path,
                   "close_lower": path * np.exp(-spread),
                   "close_upper": path * np.exp(spread)}
