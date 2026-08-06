@@ -129,8 +129,12 @@ class RealTFTModel:
         if "ticker" not in result.columns:
             result["ticker"] = self.ticker
         result["group_id"] = result["ticker"].astype(str)
+        result["date"] = pd.to_datetime(result["date"])
         result = result.sort_values(["group_id", "date"]).reset_index(drop=True)
-        result["time_idx"] = result.groupby("group_id").cumcount()
+        all_dates = np.sort(result["date"].unique())
+        date_to_idx = pd.Series(np.arange(len(all_dates)),
+                                index=pd.DatetimeIndex(all_dates))
+        result["time_idx"] = result["date"].map(date_to_idx).astype(int)
 
         numeric_cols = result.select_dtypes(include=[np.number]).columns
         result[numeric_cols] = (
